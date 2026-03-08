@@ -1,0 +1,34 @@
+#pragma once
+
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+#include <cstdint>
+#include <string_view>
+#include <string>
+
+class IWindow {
+public:
+    virtual void init() = 0;
+    virtual void pollEvents() = 0;
+    virtual bool shouldClose() = 0;
+};
+
+class GLFWVulkanWindow : public IWindow {
+public:
+    GLFWVulkanWindow(uint32_t w, uint32_t h, std::string_view title)
+    : _width(w), _height(h), _title(title) {}
+
+    void init() override;
+    void pollEvents() override;
+    bool shouldClose() override;
+
+    ~GLFWVulkanWindow() {
+        glfwDestroyWindow(_window);
+        glfwTerminate();
+    }
+private:
+    uint32_t _width;
+    uint32_t _height;
+    std::string _title;
+    GLFWwindow *_window = nullptr;
+};
