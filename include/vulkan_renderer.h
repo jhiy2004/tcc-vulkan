@@ -20,6 +20,7 @@ private:
     void setup_debug_messenger();
     void pick_physical_device();
     bool is_device_suitable(vk::raii::PhysicalDevice const & physicalDevice);
+    void create_logical_device();
 
     std::vector<const char*> get_required_instance_extensions();
     static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
@@ -28,12 +29,15 @@ private:
         const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
         void* pUserData);
 
+    std::unique_ptr<vk::raii::Context> _context = std::make_unique<vk::raii::Context>();
     std::unique_ptr<vk::raii::Instance> _instance = nullptr;
     std::unique_ptr<vk::raii::PhysicalDevice> _physical_device = nullptr;
+    std::unique_ptr<vk::raii::Device> _device = nullptr;
     std::unique_ptr<vk::raii::DebugUtilsMessengerEXT> _debug_messenger = nullptr;
-    std::unique_ptr<vk::raii::Context> _context = std::make_unique<vk::raii::Context>();
+    std::unique_ptr<vk::PhysicalDeviceFeatures> _device_features = nullptr;
+    std::unique_ptr<vk::raii::Queue> _graphics_queue = nullptr;
 
-    const std::vector<char const*> validationLayers = {
+    const std::vector<char const*> _validation_layers = {
         "VK_LAYER_KHRONOS_validation"
     };
 
