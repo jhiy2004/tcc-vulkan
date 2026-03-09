@@ -2,6 +2,7 @@
 
 #include <GLFW/glfw3.h>
 #include <iostream>
+#include <stdexcept>
 
 VKAPI_ATTR VkBool32 VKAPI_CALL VulkanRenderer::debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity,
@@ -17,6 +18,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanRenderer::debug_callback(
 void VulkanRenderer::init() {
     create_instance();
     setup_debug_messenger();
+    pick_physical_device();
     return;
 }
 
@@ -101,4 +103,57 @@ void VulkanRenderer::setup_debug_messenger() {
         .messageType     = messageTypeFlags,
         .pfnUserCallback = &VulkanRenderer::debug_callback};
     *_debug_messenger = _instance->createDebugUtilsMessengerEXT( debugUtilsMessengerCreateInfoEXT );
+}
+
+void VulkanRenderer::pick_physical_device() {
+    auto physical_devices = _instance->enumeratePhysicalDevices();
+
+    if (physical_devices.empty()) {
+        throw std::runtime_error("failed to find GPUs with Vulkan support!");
+    }
+
+#ifndef NDEBUG
+    std::cout << "Founded physical devices: " << physical_devices.size() << "\n";
+#endif
+
+    for (auto physical_device : physical_devices) {
+#ifndef NDEBUG
+        std::cout << "Validating a physical device: " << physical_device.getProperties().deviceName << std::endl;
+#endif
+        if (is_device_suitable(physical_device)) {
+            _physical_device = std::make_unique<vk::raii::PhysicalDevice>(physical_device);
+            std::cout << "Found a physical device: " << physical_device.getProperties().deviceName;
+            return;
+        }
+    }
+
+    throw std::runtime_error("Failed to find a suitable GPU");
+}
+
+bool VulkanRenderer::is_device_suitable(vk::raii::PhysicalDevice const & physical_device) {
+    std::vector<const char*> required_device_extension = {vk::KHRSwapchainExtensionName};
+
+    bool supports_vulkan_1_3 = physical_device.getProperties().apiVersion >= vk::ApiVersion13;
+
+    auto queue_families = physical_device.getQueueFamilyProperties();
+    bool supports_graphics =
+        std::ranges::any_of(queue_families, [](auto const &qfp) { return !!(qfp.queueFlags & vk::QueueFlagBits::eGraphics); });
+
+    auto available_device_extensions = physical_device.enumerateDeviceExtensionProperties();
+    bool supports_all_required_extensions =
+        std::ranges::all_of(required_device_extension,
+                            [&available_device_extensions]( auto const & required_device_extension )
+                            {
+                            return std::ranges::any_of( available_device_extensions,
+                                                       [required_device_extension]( auto const & available_device_extension )
+                                                       { return strcmp( available_device_extension.extensionName, required_device_extension ) == 0; } );
+                            } );
+
+    auto features =
+        physical_device
+        .template getFeatures2<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
+    bool supports_required_features = features.template get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
+        features.template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState;
+
+    return supports_vulkan_1_3 && supports_graphics && supports_required_features && supports_all_required_extensions;
 }

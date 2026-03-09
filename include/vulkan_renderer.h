@@ -18,6 +18,8 @@ public:
 private:
     void create_instance();
     void setup_debug_messenger();
+    void pick_physical_device();
+    bool is_device_suitable(vk::raii::PhysicalDevice const & physicalDevice);
 
     std::vector<const char*> get_required_instance_extensions();
     static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
@@ -27,6 +29,7 @@ private:
         void* pUserData);
 
     std::unique_ptr<vk::raii::Instance> _instance = nullptr;
+    std::unique_ptr<vk::raii::PhysicalDevice> _physical_device = nullptr;
     std::unique_ptr<vk::raii::DebugUtilsMessengerEXT> _debug_messenger = nullptr;
     std::unique_ptr<vk::raii::Context> _context = std::make_unique<vk::raii::Context>();
 
