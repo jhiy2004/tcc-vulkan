@@ -15,6 +15,7 @@ void App::init_window() {
     }
 
     _window->init();
+    std::cout << "_window inicializado com sucesso\n";
 }
 
 void App::init_renderer() {
@@ -24,4 +25,5 @@ void App::init_renderer() {
     }
 
     _renderer->init();
+    std::cout << "_renderer inicializado com sucesso\n";
 }

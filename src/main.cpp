@@ -1,9 +1,10 @@
 #include <iostream>
-#include <glfw/glfw3.h>
+#include <GLFW/glfw3.h>
 #include <glm/common.hpp>
 #include <stb_image.h>
 #include <imgui.h>
 #include "app.h"
+#include "vulkan_renderer.h"
 
 int main() {
     GLFWVulkanWindow vk_window(800, 600, "Vulkan App");

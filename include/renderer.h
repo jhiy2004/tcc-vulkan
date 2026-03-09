@@ -22,17 +22,3 @@ public:
     }
 };
 
-class VulkanRenderer : public IRenderer {
-public:
-    void init() override {
-        return;
-    }
-
-    void draw_triangle() override {
-        return;
-    }
-
-    void draw_rectangle() override {
-        return;
-    }
-};
