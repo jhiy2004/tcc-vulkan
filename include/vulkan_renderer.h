@@ -23,6 +23,12 @@ private:
     bool is_device_suitable(vk::raii::PhysicalDevice const & physicalDevice);
     void create_logical_device();
     void create_surface(GLFWwindow* window);
+    void create_swap_chain(GLFWwindow* window);
+
+    vk::SurfaceFormatKHR choose_swap_surface_format(std::vector<vk::SurfaceFormatKHR> const &availableFormats);
+    vk::PresentModeKHR choose_swap_present_mode(std::vector<vk::PresentModeKHR> const &availablePresentModes);
+    vk::Extent2D choose_swap_extent(GLFWwindow* window, vk::SurfaceCapabilitiesKHR const &capabilities);
+    uint32_t choose_swap_min_image_count(vk::SurfaceCapabilitiesKHR const &surfaceCapabilities);
 
     std::vector<const char*> get_required_instance_extensions();
     static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
@@ -41,6 +47,11 @@ private:
     std::unique_ptr<vk::PhysicalDeviceFeatures> _device_features = nullptr;
     std::unique_ptr<vk::raii::Queue> _graphics_queue = nullptr;
     std::unique_ptr<vk::raii::SurfaceKHR> _surface = nullptr;
+
+    vk::raii::SwapchainKHR _swap_chain = nullptr;
+    std::vector<vk::Image> _swap_chain_images;
+    vk::SurfaceFormatKHR   _swap_chain_surface_format;
+    vk::Extent2D           _swap_chain_extent;
 
     const std::vector<char const*> _validation_layers = {
         "VK_LAYER_KHRONOS_validation"

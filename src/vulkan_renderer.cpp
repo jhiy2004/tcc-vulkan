@@ -20,6 +20,7 @@ void VulkanRenderer::init(IWindow* window) {
     create_surface(window->get_window());
     pick_physical_device();
     create_logical_device();
+    create_swap_chain(window->get_window());
     return;
 }
 
@@ -209,4 +210,76 @@ void VulkanRenderer::create_surface(GLFWwindow* window) {
 #ifndef NDEBUG
     std::cout << "Created Surface" << std::endl;
 #endif
+}
+
+vk::PresentModeKHR VulkanRenderer::choose_swap_present_mode(
+    std::vector<vk::PresentModeKHR> const &availablePresentModes
+) {
+    assert(std::ranges::any_of(availablePresentModes, [](auto presentMode) { return presentMode == vk::PresentModeKHR::eFifo; }));
+    return std::ranges::any_of(availablePresentModes,
+                               [](const vk::PresentModeKHR value) { return vk::PresentModeKHR::eMailbox == value; }) ?
+    vk::PresentModeKHR::eMailbox :
+    vk::PresentModeKHR::eFifo;
+}
+
+vk::Extent2D VulkanRenderer::choose_swap_extent(GLFWwindow* window, vk::SurfaceCapabilitiesKHR const &capabilities) {
+    if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
+    {
+        return capabilities.currentExtent;
+    }
+    int width, height;
+    glfwGetFramebufferSize(window, &width, &height);
+
+    return {
+        std::clamp<uint32_t>(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+        std::clamp<uint32_t>(height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
+    };
+}
+
+void VulkanRenderer::create_swap_chain(GLFWwindow* window) {
+    vk::SurfaceCapabilitiesKHR surfaceCapabilities     = _physical_device->getSurfaceCapabilitiesKHR( *(*_surface) );
+    _swap_chain_extent                                 = choose_swap_extent(window, surfaceCapabilities);
+    uint32_t minImageCount                             = choose_swap_min_image_count(surfaceCapabilities);
+
+    std::vector<vk::SurfaceFormatKHR> availableFormats = _physical_device->getSurfaceFormatsKHR(*(*_surface));
+    _swap_chain_surface_format                         = choose_swap_surface_format(availableFormats);
+    std::vector<vk::PresentModeKHR> availablePresentModes = _physical_device->getSurfacePresentModesKHR(*(*_surface));
+    vk::PresentModeKHR              presentMode           = choose_swap_present_mode(availablePresentModes);
+
+    vk::SwapchainCreateInfoKHR swapChainCreateInfo{
+        .surface          = *(*_surface),
+        .minImageCount    = minImageCount,
+        .imageFormat      = _swap_chain_surface_format.format,
+        .imageColorSpace  = _swap_chain_surface_format.colorSpace,
+        .imageExtent      = _swap_chain_extent,
+        .imageArrayLayers = 1,
+        .imageUsage       = vk::ImageUsageFlagBits::eColorAttachment,
+        .imageSharingMode = vk::SharingMode::eExclusive,
+        .preTransform     = surfaceCapabilities.currentTransform,
+        .compositeAlpha   = vk::CompositeAlphaFlagBitsKHR::eOpaque,
+        .presentMode      = choose_swap_present_mode(availablePresentModes),
+        .clipped          = true
+    };
+    _swap_chain        = vk::raii::SwapchainKHR(*_device, swapChainCreateInfo);
+    _swap_chain_images = _swap_chain.getImages();
+
+#ifndef NDEBUG
+    std::cout << "Created Swap Chain" << std::endl;
+#endif
+}
+
+uint32_t VulkanRenderer::choose_swap_min_image_count(vk::SurfaceCapabilitiesKHR const &surfaceCapabilities) {
+    auto minImageCount = std::max(3u, surfaceCapabilities.minImageCount);
+    if ((0 < surfaceCapabilities.maxImageCount) && (surfaceCapabilities.maxImageCount < minImageCount))
+    {
+        minImageCount = surfaceCapabilities.maxImageCount;
+    }
+    return minImageCount;
+}
+
+vk::SurfaceFormatKHR VulkanRenderer::choose_swap_surface_format(const std::vector<vk::SurfaceFormatKHR>& availableFormats) {
+    const auto formatIt = std::ranges::find_if(
+        availableFormats,
+        [](const auto &format) { return format.format == vk::Format::eB8G8R8A8Srgb && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear; });
+    return formatIt != availableFormats.end() ? *formatIt : availableFormats[0];
 }
