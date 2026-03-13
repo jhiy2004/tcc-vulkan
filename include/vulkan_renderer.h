@@ -1,6 +1,7 @@
 #include "renderer.h"
 
 #include <memory>
+#include <GLFW/glfw3.h>
 
 #if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
 #include <vulkan/vulkan_raii.hpp>
@@ -11,7 +12,7 @@ import vulkan_hpp;
 class VulkanRenderer : public IRenderer {
 public:
     VulkanRenderer() {};
-    void init() override;
+    void init(IWindow* window) override;
     void draw_triangle() override;
     void draw_rectangle() override;
 
@@ -21,6 +22,7 @@ private:
     void pick_physical_device();
     bool is_device_suitable(vk::raii::PhysicalDevice const & physicalDevice);
     void create_logical_device();
+    void create_surface(GLFWwindow* window);
 
     std::vector<const char*> get_required_instance_extensions();
     static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
@@ -29,6 +31,8 @@ private:
         const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
         void* pUserData);
 
+    std::vector<const char*> required_device_extension = {vk::KHRSwapchainExtensionName};
+
     std::unique_ptr<vk::raii::Context> _context = std::make_unique<vk::raii::Context>();
     std::unique_ptr<vk::raii::Instance> _instance = nullptr;
     std::unique_ptr<vk::raii::PhysicalDevice> _physical_device = nullptr;
@@ -36,6 +40,7 @@ private:
     std::unique_ptr<vk::raii::DebugUtilsMessengerEXT> _debug_messenger = nullptr;
     std::unique_ptr<vk::PhysicalDeviceFeatures> _device_features = nullptr;
     std::unique_ptr<vk::raii::Queue> _graphics_queue = nullptr;
+    std::unique_ptr<vk::raii::SurfaceKHR> _surface = nullptr;
 
     const std::vector<char const*> _validation_layers = {
         "VK_LAYER_KHRONOS_validation"

@@ -24,6 +24,6 @@ void App::init_renderer() {
         return;
     }
 
-    _renderer->init();
+    _renderer->init(_window);
     std::cout << "_renderer inicializado com sucesso\n";
 }

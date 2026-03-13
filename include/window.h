@@ -11,6 +11,7 @@ public:
     virtual void init() = 0;
     virtual void pollEvents() = 0;
     virtual bool shouldClose() = 0;
+    virtual GLFWwindow* get_window() const = 0;
 };
 
 class GLFWVulkanWindow : public IWindow {
@@ -21,6 +22,9 @@ public:
     void init() override;
     void pollEvents() override;
     bool shouldClose() override;
+    GLFWwindow* get_window() const override {
+        return _window;
+    }
 
     ~GLFWVulkanWindow() {
         glfwDestroyWindow(_window);
