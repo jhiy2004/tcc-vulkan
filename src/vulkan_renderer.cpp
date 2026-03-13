@@ -21,6 +21,7 @@ void VulkanRenderer::init(IWindow* window) {
     pick_physical_device();
     create_logical_device();
     create_swap_chain(window->get_window());
+    create_image_views();
     return;
 }
 
@@ -282,4 +283,23 @@ vk::SurfaceFormatKHR VulkanRenderer::choose_swap_surface_format(const std::vecto
         availableFormats,
         [](const auto &format) { return format.format == vk::Format::eB8G8R8A8Srgb && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear; });
     return formatIt != availableFormats.end() ? *formatIt : availableFormats[0];
+}
+
+void VulkanRenderer::create_image_views() {
+    assert(_swap_chain_image_views.empty());
+
+    vk::ImageViewCreateInfo imageViewCreateInfo{
+        .viewType         = vk::ImageViewType::e2D,
+        .format           = _swap_chain_surface_format.format,
+        .subresourceRange = { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 }
+    };
+
+    for (auto &image : _swap_chain_images) {
+        imageViewCreateInfo.image = image;
+        _swap_chain_image_views.emplace_back( *_device, imageViewCreateInfo );
+    }
+
+#ifndef NDEBUG
+    std::cout << "Created Image Views" << std::endl;
+#endif
 }

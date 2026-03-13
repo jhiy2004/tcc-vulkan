@@ -29,6 +29,7 @@ private:
     vk::PresentModeKHR choose_swap_present_mode(std::vector<vk::PresentModeKHR> const &availablePresentModes);
     vk::Extent2D choose_swap_extent(GLFWwindow* window, vk::SurfaceCapabilitiesKHR const &capabilities);
     uint32_t choose_swap_min_image_count(vk::SurfaceCapabilitiesKHR const &surfaceCapabilities);
+    void create_image_views();
 
     std::vector<const char*> get_required_instance_extensions();
     static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
@@ -52,6 +53,7 @@ private:
     std::vector<vk::Image> _swap_chain_images;
     vk::SurfaceFormatKHR   _swap_chain_surface_format;
     vk::Extent2D           _swap_chain_extent;
+    std::vector<vk::raii::ImageView> _swap_chain_image_views;
 
     const std::vector<char const*> _validation_layers = {
         "VK_LAYER_KHRONOS_validation"
