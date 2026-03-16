@@ -40,6 +40,20 @@ private:
         void* pUserData);
 
     vk::raii::ShaderModule create_shader_module(const std::vector<char> &code) const;
+    void record_command_buffer(uint32_t imageIndex);
+    void create_command_pool();
+    void create_command_buffer();
+
+    void transition_image_layout(
+        uint32_t imageIndex,
+        vk::ImageLayout oldLayout,
+        vk::ImageLayout newLayout,
+        vk::AccessFlags2 srcAccessMask,
+        vk::AccessFlags2 dstAccessMask,
+        vk::PipelineStageFlags2 srcStageMask,
+        vk::PipelineStageFlags2 dstStageMask
+    );
+
 
     std::vector<const char*> required_device_extension = {vk::KHRSwapchainExtensionName};
 
@@ -50,8 +64,12 @@ private:
     std::unique_ptr<vk::raii::DebugUtilsMessengerEXT> _debug_messenger = nullptr;
     std::unique_ptr<vk::PhysicalDeviceFeatures> _device_features = nullptr;
     std::unique_ptr<vk::raii::Queue> _graphics_queue = nullptr;
+    std::uint32_t _graphics_index = 0;
     std::unique_ptr<vk::raii::SurfaceKHR> _surface = nullptr;
     vk::raii::Pipeline       _graphics_pipeline = nullptr;
+
+    vk::raii::CommandPool    _command_pool      = nullptr;
+	vk::raii::CommandBuffer  _command_buffer    = nullptr;
 
     vk::raii::SwapchainKHR _swap_chain = nullptr;
     std::vector<vk::Image> _swap_chain_images;
