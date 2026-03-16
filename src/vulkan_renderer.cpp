@@ -1,4 +1,5 @@
 #include "vulkan_renderer.h"
+#include "util.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -22,6 +23,7 @@ void VulkanRenderer::init(IWindow* window) {
     create_logical_device();
     create_swap_chain(window->get_window());
     create_image_views();
+    create_graphics_pipeline();
     return;
 }
 
@@ -302,4 +304,78 @@ void VulkanRenderer::create_image_views() {
 #ifndef NDEBUG
     std::cout << "Created Image Views" << std::endl;
 #endif
+}
+
+void VulkanRenderer::create_graphics_pipeline() {
+    auto shaderCode = read_file(std::filesystem::path(SHADERS_DIR) / "slang.spv");
+
+    vk::raii::ShaderModule shaderModule = create_shader_module(shaderCode);
+
+    vk::PipelineShaderStageCreateInfo vertShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eVertex, .module = shaderModule,  .pName = "vertMain" };
+    vk::PipelineShaderStageCreateInfo fragShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eFragment, .module = shaderModule, .pName = "fragMain" };
+
+    vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+
+    vk::PipelineVertexInputStateCreateInfo vertexInputInfo;
+
+    vk::PipelineInputAssemblyStateCreateInfo inputAssembly{  .topology = vk::PrimitiveTopology::eTriangleList };
+
+    vk::Viewport{ 0.0f, 0.0f, static_cast<float>(_swap_chain_extent.width), static_cast<float>(_swap_chain_extent.height), 0.0f, 1.0f };
+    vk::Rect2D{ vk::Offset2D{ 0, 0 }, _swap_chain_extent };
+
+    std::vector dynamicStates = {
+        vk::DynamicState::eViewport,
+        vk::DynamicState::eScissor
+    };
+    vk::PipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.dynamicStateCount = dynamicStates.size();
+    dynamicState.pDynamicStates = dynamicStates.data();
+
+    vk::PipelineViewportStateCreateInfo viewportState;
+    viewportState.viewportCount = 1;
+    viewportState.scissorCount = 1;
+
+    vk::PipelineRasterizationStateCreateInfo rasterizer{  .depthClampEnable = vk::False, .rasterizerDiscardEnable = vk::False,
+        .polygonMode = vk::PolygonMode::eFill, .cullMode = vk::CullModeFlagBits::eBack,
+        .frontFace = vk::FrontFace::eClockwise, .depthBiasEnable = vk::False,
+        .depthBiasSlopeFactor = 1.0f, .lineWidth = 1.0f };
+
+    vk::PipelineMultisampleStateCreateInfo multisampling{.rasterizationSamples = vk::SampleCountFlagBits::e1, .sampleShadingEnable = vk::False};
+
+    vk::PipelineColorBlendAttachmentState colorBlendAttachment{
+        .blendEnable    = vk::False,
+        .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA};
+    vk::PipelineColorBlendStateCreateInfo colorBlending{.logicOpEnable = vk::False, .logicOp = vk::LogicOp::eCopy, .attachmentCount = 1, .pAttachments = &colorBlendAttachment};
+
+    vk::raii::PipelineLayout pipelineLayout = nullptr;
+
+    vk::PipelineLayoutCreateInfo pipelineLayoutInfo{  .setLayoutCount = 0, .pushConstantRangeCount = 0 };
+    pipelineLayout = vk::raii::PipelineLayout( *_device, pipelineLayoutInfo );
+
+    vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
+        {.stageCount          = 2,
+            .pStages             = shaderStages,
+            .pVertexInputState   = &vertexInputInfo,
+            .pInputAssemblyState = &inputAssembly,
+            .pViewportState      = &viewportState,
+            .pRasterizationState = &rasterizer,
+            .pMultisampleState   = &multisampling,
+            .pColorBlendState    = &colorBlending,
+            .pDynamicState       = &dynamicState,
+            .layout              = pipelineLayout,
+            .renderPass          = nullptr},
+        {.colorAttachmentCount = 1, .pColorAttachmentFormats = &_swap_chain_surface_format.format}};
+
+    _graphics_pipeline = vk::raii::Pipeline(*_device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+#ifndef NDEBUG
+    std::cout << "Created graphics pipeline" << std::endl;
+#endif
+}
+
+[[nodiscard]]
+vk::raii::ShaderModule VulkanRenderer::create_shader_module(const std::vector<char> &code) const {
+    vk::ShaderModuleCreateInfo createInfo{ .codeSize = code.size() * sizeof(char), .pCode = reinterpret_cast<const uint32_t*>(code.data()) };
+    vk::raii::ShaderModule shaderModule{ *_device, createInfo };
+
+    return shaderModule;
 }

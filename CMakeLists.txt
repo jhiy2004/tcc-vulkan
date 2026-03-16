@@ -11,6 +11,7 @@ add_executable(tcc
     ${CMAKE_CURRENT_SOURCE_DIR}/src/app.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/window.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vulkan_renderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/util.cpp
 )
 
 target_include_directories(tcc
@@ -53,4 +54,8 @@ target_link_libraries(tcc
     glm
     imgui
     VulkanCppModule
+)
+
+target_compile_definitions(tcc
+    PRIVATE SHADERS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/shaders"
 )

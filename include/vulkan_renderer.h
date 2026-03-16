@@ -24,6 +24,7 @@ private:
     void create_logical_device();
     void create_surface(GLFWwindow* window);
     void create_swap_chain(GLFWwindow* window);
+    void create_graphics_pipeline();
 
     vk::SurfaceFormatKHR choose_swap_surface_format(std::vector<vk::SurfaceFormatKHR> const &availableFormats);
     vk::PresentModeKHR choose_swap_present_mode(std::vector<vk::PresentModeKHR> const &availablePresentModes);
@@ -38,6 +39,8 @@ private:
         const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
         void* pUserData);
 
+    vk::raii::ShaderModule create_shader_module(const std::vector<char> &code) const;
+
     std::vector<const char*> required_device_extension = {vk::KHRSwapchainExtensionName};
 
     std::unique_ptr<vk::raii::Context> _context = std::make_unique<vk::raii::Context>();
@@ -48,6 +51,7 @@ private:
     std::unique_ptr<vk::PhysicalDeviceFeatures> _device_features = nullptr;
     std::unique_ptr<vk::raii::Queue> _graphics_queue = nullptr;
     std::unique_ptr<vk::raii::SurfaceKHR> _surface = nullptr;
+    vk::raii::Pipeline       _graphics_pipeline = nullptr;
 
     vk::raii::SwapchainKHR _swap_chain = nullptr;
     std::vector<vk::Image> _swap_chain_images;
