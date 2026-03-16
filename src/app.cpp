@@ -5,6 +5,8 @@
 void App::run() {
     while(!_window->shouldClose()) {
         _window->pollEvents();
+
+        _renderer->draw_triangle();
     }
 }
 

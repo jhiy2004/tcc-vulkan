@@ -26,10 +26,49 @@ void VulkanRenderer::init(IWindow* window) {
     create_graphics_pipeline();
     create_command_pool();
     create_command_buffer();
+    create_sync_objects();
     return;
 }
 
 void VulkanRenderer::draw_triangle() {
+    auto fenceResult = _device->waitForFences(*_draw_fence, vk::True, UINT64_MAX);
+
+    auto [result, imageIndex] = _swap_chain.acquireNextImage(UINT64_MAX, *_present_complete_semaphore, nullptr);
+
+    record_command_buffer(imageIndex);
+    _device->resetFences(*_draw_fence);
+
+    vk::PipelineStageFlags waitDestinationStageMask( vk::PipelineStageFlagBits::eColorAttachmentOutput );
+    const vk::SubmitInfo submitInfo{
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &*_present_complete_semaphore,
+        .pWaitDstStageMask = &waitDestinationStageMask,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &*_command_buffer,
+        .signalSemaphoreCount = 1,
+        .pSignalSemaphores = &*_render_finished_semaphore};
+
+    _graphics_queue->submit(submitInfo, *_draw_fence);
+
+    const vk::PresentInfoKHR presentInfoKHR{
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &*_render_finished_semaphore,
+        .swapchainCount = 1,
+        .pSwapchains = &*_swap_chain,
+        .pImageIndices = &imageIndex};
+
+    result = _graphics_queue->presentKHR(presentInfoKHR);
+    switch (result)
+    {
+        case vk::Result::eSuccess:
+            break;
+        case vk::Result::eSuboptimalKHR:
+            std::cout << "vk::Queue::presentKHR returned vk::Result::eSuboptimalKHR !\n";
+            break;
+        default:
+            break;        // an unexpected result is returned!
+    }
+
     return;
 }
 
@@ -445,12 +484,18 @@ void VulkanRenderer::create_command_pool() {
     vk::CommandPoolCreateInfo poolInfo{ .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer, .queueFamilyIndex = _graphics_index };
 
     _command_pool = vk::raii::CommandPool(*_device, poolInfo);
+#ifndef NDEBUG
+    std::cout << "Created command pool" << std::endl;
+#endif
 }
 
 void VulkanRenderer::create_command_buffer() {
     vk::CommandBufferAllocateInfo allocInfo{ .commandPool = _command_pool, .level = vk::CommandBufferLevel::ePrimary, .commandBufferCount = 1 };
 
     _command_buffer = std::move(vk::raii::CommandBuffers(*_device, allocInfo).front());
+#ifndef NDEBUG
+    std::cout << "Created command buffer" << std::endl;
+#endif
 }
 
 void VulkanRenderer::transition_image_layout(
@@ -486,4 +531,13 @@ void VulkanRenderer::transition_image_layout(
         .pImageMemoryBarriers = &barrier
     };
     _command_buffer.pipelineBarrier2(dependencyInfo);
+}
+
+void VulkanRenderer::create_sync_objects() {
+    _present_complete_semaphore = vk::raii::Semaphore(*_device, vk::SemaphoreCreateInfo());
+    _render_finished_semaphore = vk::raii::Semaphore(*_device, vk::SemaphoreCreateInfo());
+    _draw_fence = vk::raii::Fence(*_device, {.flags = vk::FenceCreateFlagBits::eSignaled});
+#ifndef NDEBUG
+    std::cout << "Created sync objects" << std::endl;
+#endif
 }

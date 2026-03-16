@@ -54,6 +54,8 @@ private:
         vk::PipelineStageFlags2 dstStageMask
     );
 
+    void create_sync_objects();
+
 
     std::vector<const char*> required_device_extension = {vk::KHRSwapchainExtensionName};
 
@@ -70,6 +72,10 @@ private:
 
     vk::raii::CommandPool    _command_pool      = nullptr;
 	vk::raii::CommandBuffer  _command_buffer    = nullptr;
+
+    vk::raii::Semaphore _present_complete_semaphore = nullptr;
+    vk::raii::Semaphore _render_finished_semaphore = nullptr;
+    vk::raii::Fence _draw_fence = nullptr;
 
     vk::raii::SwapchainKHR _swap_chain = nullptr;
     std::vector<vk::Image> _swap_chain_images;
