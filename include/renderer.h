@@ -9,18 +9,3 @@ public:
     virtual void draw_rectangle() = 0;
 };
 
-class OpenGLRenderer : public IRenderer {
-public:
-    void init(IWindow* window) override {
-        return;
-    }
-
-    void draw_triangle() override {
-        return;
-    }
-
-    void draw_rectangle() override {
-        return;
-    }
-};
-

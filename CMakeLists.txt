@@ -9,8 +9,10 @@ project(tcc)
 add_executable(tcc
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/app.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/window.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/glfw_window_opengl.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/glfw_window_vulkan.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vulkan_renderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/opengl_renderer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/util.cpp
 )
 
@@ -19,6 +21,7 @@ target_include_directories(tcc
 )
 
 find_package(Vulkan REQUIRED)
+find_package(OpenGL REQUIRED)
 
 # Start Vulkan-Hpp configuration
 add_library(VulkanCppModule)
@@ -48,12 +51,15 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/glfw-3.4)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/glm)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/stb_image)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui-1.92.6)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/glad)
 
 target_link_libraries(tcc
     stb_image
     glm
     imgui
     VulkanCppModule
+    glad
+    OpenGL::GL
 )
 
 target_compile_definitions(tcc

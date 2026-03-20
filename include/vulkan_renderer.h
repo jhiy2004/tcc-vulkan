@@ -1,7 +1,9 @@
 #include "renderer.h"
 
-#include <memory>
+#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+
+#include <memory>
 
 #if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
 #include <vulkan/vulkan_raii.hpp>

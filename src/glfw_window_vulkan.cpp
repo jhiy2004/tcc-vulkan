@@ -1,4 +1,4 @@
-#include "window.h"
+#include "glfw_window_vulkan.h"
 
 void GLFWVulkanWindow::init() {
     glfwInit();
@@ -15,3 +15,4 @@ void GLFWVulkanWindow::pollEvents() {
 bool GLFWVulkanWindow::shouldClose() {
     return glfwWindowShouldClose(_window);
 }
+
