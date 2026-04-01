@@ -1,0 +1,12 @@
+(Tem que ter bytes para indicar os limites para as componentes x, y e z)
+
+Primeiro Byte: Indicar precisao: double (8 bytes), float ou int (4 bytes)
+Segundo até o Nono Byte: Indicar o tamanho das matrizes (n x m)
+Décimo Byte até o Décimo 13: Indicar quantidade de snapshots da simulação (y)
+Próximos n x m x (precisao) bytes: Matriz de valores z de batimetrias
+Próximos n x m x y x (precisao) bytes: y Matrizes de valores z de superfície livre
+
+Exemplo: Considerando uma simulacão de 5000 snapshots discreta em 1000 x 1000 pontos e dupla precisão, teremos
+
+1 + 8 + 4 (1000 * 1000 * 8) + (1000 * 1000 * 5000 * 8) = 40008000004 = 37.2 GB
+

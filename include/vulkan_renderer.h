@@ -1,4 +1,5 @@
 #include "renderer.h"
+#include "window.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -24,8 +25,8 @@ private:
     void pick_physical_device();
     bool is_device_suitable(vk::raii::PhysicalDevice const & physicalDevice);
     void create_logical_device();
-    void create_surface(GLFWwindow* window);
-    void create_swap_chain(GLFWwindow* window);
+    void create_surface();
+    void create_swap_chain();
     void create_graphics_pipeline();
 
     vk::SurfaceFormatKHR choose_swap_surface_format(std::vector<vk::SurfaceFormatKHR> const &availableFormats);
@@ -57,10 +58,13 @@ private:
     );
 
     void create_sync_objects();
+    void recreate_swap_chain();
+    void cleanup_swap_chain();
 
-
+    bool _framebuffer_resized = false;
     std::vector<const char*> required_device_extension = {vk::KHRSwapchainExtensionName};
 
+    GLFWwindow* _window;
     std::unique_ptr<vk::raii::Context> _context = std::make_unique<vk::raii::Context>();
     std::unique_ptr<vk::raii::Instance> _instance = nullptr;
     std::unique_ptr<vk::raii::PhysicalDevice> _physical_device = nullptr;
@@ -73,7 +77,7 @@ private:
     vk::raii::Pipeline       _graphics_pipeline = nullptr;
 
     vk::raii::CommandPool    _command_pool      = nullptr;
-	vk::raii::CommandBuffer  _command_buffer    = nullptr;
+    vk::raii::CommandBuffer  _command_buffer    = nullptr;
 
     vk::raii::Semaphore _present_complete_semaphore = nullptr;
     vk::raii::Semaphore _render_finished_semaphore = nullptr;

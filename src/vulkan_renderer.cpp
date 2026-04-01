@@ -16,12 +16,14 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanRenderer::debug_callback(
     return VK_FALSE;
 }
 void VulkanRenderer::init(IWindow* window) {
+    _window = window->get_window();
+
     create_instance();
     setup_debug_messenger();
-    create_surface(window->get_window());
+    create_surface();
     pick_physical_device();
     create_logical_device();
-    create_swap_chain(window->get_window());
+    create_swap_chain();
     create_image_views();
     create_graphics_pipeline();
     create_command_pool();
@@ -34,6 +36,11 @@ void VulkanRenderer::draw_triangle() {
     auto fenceResult = _device->waitForFences(*_draw_fence, vk::True, UINT64_MAX);
 
     auto [result, imageIndex] = _swap_chain.acquireNextImage(UINT64_MAX, *_present_complete_semaphore, nullptr);
+
+    if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR || framebufferResized) {
+        _framebuffer_resized = false;
+        recreate_swap_chain();
+    }
 
     record_command_buffer(imageIndex);
     _device->resetFences(*_draw_fence);
@@ -246,9 +253,9 @@ void VulkanRenderer::create_logical_device() {
 #endif
 }
 
-void VulkanRenderer::create_surface(GLFWwindow* window) {
+void VulkanRenderer::create_surface() {
     VkSurfaceKHR surface;
-    if(glfwCreateWindowSurface(*(*_instance), window, nullptr, &surface)){
+    if(glfwCreateWindowSurface(*(*_instance), _window, nullptr, &surface)){
         throw std::runtime_error("failed to create window surface!");
     }
     _surface = std::make_unique<vk::raii::SurfaceKHR>(*_instance, surface);
@@ -281,9 +288,9 @@ vk::Extent2D VulkanRenderer::choose_swap_extent(GLFWwindow* window, vk::SurfaceC
     };
 }
 
-void VulkanRenderer::create_swap_chain(GLFWwindow* window) {
+void VulkanRenderer::create_swap_chain() {
     vk::SurfaceCapabilitiesKHR surfaceCapabilities     = _physical_device->getSurfaceCapabilitiesKHR( *(*_surface) );
-    _swap_chain_extent                                 = choose_swap_extent(window, surfaceCapabilities);
+    _swap_chain_extent                                 = choose_swap_extent(_window, surfaceCapabilities);
     uint32_t minImageCount                             = choose_swap_min_image_count(surfaceCapabilities);
 
     std::vector<vk::SurfaceFormatKHR> availableFormats = _physical_device->getSurfaceFormatsKHR(*(*_surface));
@@ -540,4 +547,18 @@ void VulkanRenderer::create_sync_objects() {
 #ifndef NDEBUG
     std::cout << "Created sync objects" << std::endl;
 #endif
+}
+
+void VulkanRenderer::cleanup_swap_chain() {
+    _swap_chain_image_views.clear();
+    _swap_chain = nullptr;
+}
+
+void VulkanRenderer::recreate_swap_chain() {
+    _device->waitIdle();
+
+    cleanup_swap_chain();
+
+    create_swap_chain();
+    create_image_views();
 }

@@ -11,12 +11,12 @@
 
 
 int main() {
-    //GLFWVulkanWindow vk_window(800, 600, "Vulkan App");
-    GLFWOpenGLWindow gl_window(800, 600, "OpenGL App");
-    OpenGLRenderer gl_renderer;
-    //VulkanRenderer vk_renderer;
+    GLFWVulkanWindow vk_window(800, 600, "Vulkan App");
+    //GLFWOpenGLWindow gl_window(800, 600, "OpenGL App");
+    //OpenGLRenderer gl_renderer;
+    VulkanRenderer vk_renderer;
 
-    App app(&gl_window, &gl_renderer);
+    App app(&vk_window, &vk_renderer);
 
     app.run();
     
