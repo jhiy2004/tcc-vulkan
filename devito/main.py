@@ -1,8 +1,10 @@
 from devito import Eq, TimeFunction, sqrt, Function, Operator, Grid, solve
+import time
 import numpy as np
 import dotenv
 import os
 import math
+import struct
 from pathlib import Path
 import matplotlib.pyplot as plt
 
@@ -71,24 +73,27 @@ def generate_simulation_file(filepath: Path, initial_cond: InitialConditions, t_
     dt = t_max / nt
     nblocks = math.ceil(nt / buffer_size)
 
-    order = 'little'
-
     with open(filepath, "wb") as f:
         if num_type == 'double':
             np_type = np.float64
             f.write(b'\x02')
+            fmt = "<d"
         elif num_type == 'float':
             np_type = np.float32
             f.write(b'\x01')
+            fmt = "<f"
         elif num_type == 'int':
             np_type = np.int32
             f.write(b'\x00')
+            fmt = "<i"
         else:
             raise ValueError
+        f.write(struct.pack(fmt, grid.extent[0]))
+        f.write(struct.pack(fmt, grid.extent[1]))
 
-        f.write(int(eta.data.shape[1]).to_bytes(4, byteorder=order))
-        f.write(int(eta.data.shape[2]).to_bytes(4, byteorder=order))
-        f.write(int(nt).to_bytes(4, byteorder=order))
+        f.write(struct.pack("<I", eta.data.shape[1]))
+        f.write(struct.pack("<I", eta.data.shape[2]))
+        f.write(struct.pack("<I", nt))
 
         h.data.astype(np_type).tofile(f)
         for b in range(nblocks):
@@ -100,7 +105,7 @@ def generate_simulation_file(filepath: Path, initial_cond: InitialConditions, t_
             # salvar snapshots
             data = eta_res.data[:steps].copy()
 
-            if b > 50:
+            if b > nblocks + 1:
                 # Cria a figura para o frame atual
                 fig, ax = plt.subplots(figsize=(6, 5)) # Tamanho opcional para ficar mais bonito
                 # Pegamos o frame atual (substitua eta_res.data pelo array correto que você está usando)
@@ -174,6 +179,114 @@ def ForwardOperator(etasave, eta, M, N, h, D, g, alpha, grid):
 
     return Operator([update_eta, update_M, update_N, eq_D] + [Eq(etasave, eta)])
 
+def convert_frame_pos_to_point(frame: np.ndarray, row: int, col: int):
+    return (col, row, frame[row, col])
+
+
+class Geometry:
+    def __init__(self, points: np.ndarray, triangles: np.ndarray):
+        self.points = points
+        self.triangles = triangles
+
+
+def create_base_geometry(rows, cols, extent):
+    xmin, xmax, ymin, ymax = extent
+
+    xs = np.linspace(xmin, xmax, cols, dtype=np.float32)
+    ys = np.linspace(ymin, ymax, rows, dtype=np.float32)
+
+    X, Y = np.meshgrid(xs, ys)
+
+    points = np.empty((rows * cols, 3), dtype=np.float32)
+    points[:, 0] = X.ravel()
+    points[:, 1] = Y.ravel()
+    points[:, 2] = 0.0
+
+    i = np.arange(rows * cols, dtype=np.uint32).reshape(rows, cols)
+
+    i0 = i[:-1, :-1].ravel()
+    i1 = i[:-1, 1:].ravel()
+    i2 = i[1:, :-1].ravel()
+    i3 = i[1:, 1:].ravel()
+
+    t1 = np.stack((i0, i1, i2), axis=1)
+    t2 = np.stack((i1, i3, i2), axis=1)
+
+    triangles = np.vstack((t1, t2))
+
+    return Geometry(points, triangles)
+
+def triangulate_frame(frame: np.ndarray, geometry: Geometry):
+    geometry.points[:, 2] = frame.ravel()
+    return geometry
+
+def save_frame(geometry: Geometry, f):
+    f.write(struct.pack("<II",
+        len(geometry.points),
+        len(geometry.triangles)
+    ))
+
+    points = np.ascontiguousarray(geometry.points, dtype=np.float32)
+    triangles = np.ascontiguousarray(geometry.triangles, dtype=np.uint32)
+
+    points.tofile(f)
+    triangles.tofile(f)
+
+def save_triangulated_sim(sim_filename: str, output_filename: str):
+    with open(sim_filename, "rb") as f:
+        sim_type = f.read(1)
+
+        if sim_type == b'\x02':
+            np_type = np.float64
+            fmt = "<d"
+        elif sim_type == b'\x01':
+            np_type = np.float32
+            fmt = "<f"
+        elif sim_type == b'\x00':
+            np_type = np.int32
+            fmt = "<i"
+        else:
+            raise ValueError
+
+        # header
+        x_extent = struct.unpack(fmt, f.read(np.dtype(np_type).itemsize))[0]
+        y_extent = struct.unpack(fmt, f.read(np.dtype(np_type).itemsize))[0]
+        rows = struct.unpack("<I", f.read(4))[0]
+        cols = struct.unpack("<I", f.read(4))[0]
+        nt   = struct.unpack("<I", f.read(4))[0]
+
+        data = np.fromfile(f, dtype=np_type, count=rows * cols)
+        data = data.reshape((rows, cols))
+
+        file = open(output_filename, "wb")
+        # save triangulated_sim header
+        file.write(struct.pack("<I", nt))
+
+        file.close()
+
+        file = open(output_filename, "ab")
+
+        geometry = create_base_geometry(rows, cols, [0, x_extent, 0, y_extent])
+
+        start = time.perf_counter()
+        data.astype(np_type).tofile(f) 
+        save_frame(geometry, file)
+        end = time.perf_counter()
+
+        print(f"Saved bathymetry in {end - start:.6f} s")
+
+        for i in range(nt):
+            data = np.fromfile(f, dtype=np_type, count=rows * cols)
+            data = data.reshape((rows, cols))
+
+            start = time.perf_counter()
+            triangulate_frame(data, geometry)
+            save_frame(geometry, file)
+            end = time.perf_counter()
+
+            print(f"Saved frame {i} in {end - start:.6f} s")
+
+        file.close()
 
 if __name__ == "__main__":
     np.set_printoptions(threshold=np.inf)
@@ -221,6 +334,7 @@ if __name__ == "__main__":
 
     try:
         generate_simulation_file(output_path / "example.sim", init_cond, 3.5, 8000, 500, 'float')
+        print("Generate simulation file")
     except ValueError:
         print("Shit")
         exit(2)
