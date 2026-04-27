@@ -10,13 +10,10 @@
 #include "vulkan_renderer.h"
 #include "opengl_renderer.h"
 
-
-int main() {
-    Loader loader(std::filesystem::path(FILES_DIR) / "example.sim");
-
+void print_frame(Frame &frame) {
     int count = 0;
     std::cout << "Points:\n";
-    for (Point p : loader.get_bathymetry()) {
+    for (Point p : frame.points) {
         std::cout << "(" << p.x << ", " << p.y << ", " << p.z << ")" << std::endl;
 
         if (count > 100) {
@@ -25,20 +22,46 @@ int main() {
 
         count++;
     }
+}
 
-    count = 0;
-    std::cout << "Triangles:\n";
-    for (Triangle t : loader.get_triangles()) {
-        std::cout << "(" << t.p1 << ", " << t.p2 << ", " << t.p3 << ")" << std::endl;
-
-        if (count > 100) {
+void frame_producer(FrameBuffer& fb, Loader& loader) {
+    Frame frame;
+    while (true) {
+        bool res = loader.load_frame();
+        if (!res) {
             break;
         }
 
-        count++;
+        frame.points = loader.get_frame_points();
+        fb.push(std::move(frame));
     }
 
+    fb.set_finished();
+}
 
+void consumer(FrameBuffer& fb) {
+    Frame frame;
+    int count = 1;
+    while (true) {
+        bool res = fb.pop(frame);
+        if (!res) {
+            break;
+        }
+        count++;
+        std::cout << "loading frame " << count << std::endl;
+        //print_frame(frame);
+    }
+}
+
+int main() {
+    Loader loader(std::filesystem::path(FILES_DIR) / "example.sim");
+    FrameBuffer fb(10);
+
+    std::thread producer(frame_producer, std::ref(fb), std::ref(loader));
+
+    consumer(fb);
+
+    producer.join();
     return 0;
 
     GLFWVulkanWindow vk_window(800, 600, "Vulkan App");

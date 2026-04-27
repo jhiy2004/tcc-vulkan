@@ -37,7 +37,7 @@ void VulkanRenderer::draw_triangle() {
 
     auto [result, imageIndex] = _swap_chain.acquireNextImage(UINT64_MAX, *_present_complete_semaphore, nullptr);
 
-    if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR || framebufferResized) {
+    if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR) {
         _framebuffer_resized = false;
         recreate_swap_chain();
     }

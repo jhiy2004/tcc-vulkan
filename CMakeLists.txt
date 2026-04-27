@@ -8,12 +8,13 @@ project(tcc)
 
 add_executable(tcc
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
-    #${CMAKE_CURRENT_SOURCE_DIR}/src/app.cpp
-    #${CMAKE_CURRENT_SOURCE_DIR}/src/glfw_window_opengl.cpp
-    #${CMAKE_CURRENT_SOURCE_DIR}/src/glfw_window_vulkan.cpp
-    #${CMAKE_CURRENT_SOURCE_DIR}/src/vulkan_renderer.cpp
-    #${CMAKE_CURRENT_SOURCE_DIR}/src/opengl_renderer.cpp
-    #${CMAKE_CURRENT_SOURCE_DIR}/src/util.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/loader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/app.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/glfw_window_opengl.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/glfw_window_vulkan.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vulkan_renderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/opengl_renderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/util.cpp
 )
 
 target_include_directories(tcc

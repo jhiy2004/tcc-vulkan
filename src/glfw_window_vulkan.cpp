@@ -1,10 +1,5 @@
 #include "glfw_window_vulkan.h"
 
-static void framebuffer_resize_callback(GLFWwindow* window, int width, int height) {
-    auto app = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
-    app->framebufferResized = true;
-}
-
 void GLFWVulkanWindow::init() {
     glfwInit();
 
