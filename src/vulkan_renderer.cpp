@@ -1,8 +1,10 @@
 #include "vulkan_renderer.h"
+#include "loader.h"
 #include "util.h"
 
 #include <iostream>
 #include <stdexcept>
+#include <vulkan/vulkan_core.h>
 
 VKAPI_ATTR VkBool32 VKAPI_CALL VulkanRenderer::debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity,
@@ -365,7 +367,22 @@ void VulkanRenderer::create_graphics_pipeline() {
 
     vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
-    vk::PipelineVertexInputStateCreateInfo vertexInputInfo;
+    vk::VertexInputBindingDescription bindingDesc{};
+    bindingDesc.binding = 0;
+    bindingDesc.stride = sizeof(Point);
+    bindingDesc.inputRate = vk::VertexInputRate::eVertex;
+
+    vk::VertexInputAttributeDescription attrDesc{};
+    attrDesc.location = 0;
+    attrDesc.binding = 0;
+    attrDesc.format = vk::Format::eR32G32B32Sfloat;
+    attrDesc.offset = 0;
+
+    vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.pVertexBindingDescriptions = &bindingDesc;
+    vertexInputInfo.vertexAttributeDescriptionCount = 1;
+    vertexInputInfo.pVertexAttributeDescriptions = &attrDesc;
 
     vk::PipelineInputAssemblyStateCreateInfo inputAssembly{  .topology = vk::PrimitiveTopology::eTriangleList };
 
@@ -385,7 +402,7 @@ void VulkanRenderer::create_graphics_pipeline() {
     viewportState.scissorCount = 1;
 
     vk::PipelineRasterizationStateCreateInfo rasterizer{  .depthClampEnable = vk::False, .rasterizerDiscardEnable = vk::False,
-        .polygonMode = vk::PolygonMode::eFill, .cullMode = vk::CullModeFlagBits::eBack,
+        .polygonMode = vk::PolygonMode::eFill, .cullMode = vk::CullModeFlagBits::eNone,
         .frontFace = vk::FrontFace::eClockwise, .depthBiasEnable = vk::False,
         .depthBiasSlopeFactor = 1.0f, .lineWidth = 1.0f };
 
@@ -465,6 +482,86 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex) {
     _command_buffer.beginRendering(renderingInfo);
 
     // Rendering commands will go here
+
+
+    // Testes com buffer
+    Point points[] = {
+        {0.0f, -0.5f, 0.0f},
+        {0.5f, 0.5f, 0.0f},
+        {-0.5f, 0.5f, 0.0f},
+    };
+
+    VkBuffer vertexBuffer;
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = sizeof(points);
+    bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(**_device, &bufferInfo, nullptr, &vertexBuffer) != VK_SUCCESS) {
+        std::cout << "Falha ao criar o buffer do triangulo" << std::endl; 
+    }
+
+    VkMemoryRequirements memReq;
+    vkGetBufferMemoryRequirements(**_device, vertexBuffer, &memReq);
+
+    // --------------------------------------------
+    // 3. Escolher tipo de memória HOST_VISIBLE
+    // --------------------------------------------
+    VkPhysicalDeviceMemoryProperties memProps;
+    vkGetPhysicalDeviceMemoryProperties(**_physical_device, &memProps);
+
+    uint32_t memoryTypeIndex = 0;
+    for (uint32_t i = 0; i < memProps.memoryTypeCount; i++)
+    {
+        bool supported = memReq.memoryTypeBits & (1 << i);
+
+        bool wanted =
+            (memProps.memoryTypes[i].propertyFlags &
+            (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+            ==
+            (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        if (supported && wanted) {
+            memoryTypeIndex = i;
+            break;
+        }
+    }
+
+    // --------------------------------------------
+    // 4. Alocar memória
+    // --------------------------------------------
+    VkDeviceMemory vertexMemory;
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memReq.size;
+    allocInfo.memoryTypeIndex = memoryTypeIndex;
+
+    vkAllocateMemory(**_device, &allocInfo, nullptr, &vertexMemory);
+
+
+    // --------------------------------------------
+    // 5. Associar buffer + memória
+    // --------------------------------------------
+    vkBindBufferMemory(**_device, vertexBuffer, vertexMemory, 0);
+
+    // --------------------------------------------
+    // 6. Copiar vértices com memcpy
+    // --------------------------------------------
+    void* data = nullptr;
+
+    vkMapMemory(**_device, vertexMemory, 0, sizeof(points), 0, &data);
+    memcpy(data, points, sizeof(points));
+    vkUnmapMemory(**_device, vertexMemory);
+
+    VkDeviceSize offsets[] = {0};
+
+    vkCmdBindVertexBuffers(*_command_buffer, 0, 1, &vertexBuffer, offsets);
+    // Fim testes com buffer
+
     _command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, _graphics_pipeline);
     _command_buffer.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(_swap_chain_extent.width), static_cast<float>(_swap_chain_extent.height), 0.0f, 1.0f));
     _command_buffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), _swap_chain_extent));

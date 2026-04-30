@@ -12,9 +12,11 @@
 import vulkan_hpp;
 #endif
 
+#include "loader.h"
+
 class VulkanRenderer : public IRenderer {
 public:
-    VulkanRenderer() {};
+    VulkanRenderer(FrameBuffer& fb) : _frame_buffer(fb) {};
     void init(IWindow* window) override;
     void draw_triangle() override;
     void draw_rectangle() override;
@@ -60,6 +62,9 @@ private:
     void create_sync_objects();
     void recreate_swap_chain();
     void cleanup_swap_chain();
+
+    FrameBuffer& _frame_buffer;
+    Frame _current_frame;
 
     bool _framebuffer_resized = false;
     std::vector<const char*> required_device_extension = {vk::KHRSwapchainExtensionName};

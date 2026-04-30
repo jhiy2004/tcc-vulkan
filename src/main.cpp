@@ -57,6 +57,19 @@ int main() {
     Loader loader(std::filesystem::path(FILES_DIR) / "example.sim");
     FrameBuffer fb(10);
 
+    GLFWVulkanWindow vk_window(800, 600, "Vulkan App");
+    VulkanRenderer vk_renderer(fb);
+
+    //GLFWOpenGLWindow gl_window(800, 600, "OpenGL App");
+    //OpenGLRenderer gl_renderer;
+
+    App app(&vk_window, &vk_renderer);
+
+    app.run();
+    
+    return 0;
+
+
     std::thread producer(frame_producer, std::ref(fb), std::ref(loader));
 
     consumer(fb);
@@ -64,14 +77,4 @@ int main() {
     producer.join();
     return 0;
 
-    GLFWVulkanWindow vk_window(800, 600, "Vulkan App");
-    //GLFWOpenGLWindow gl_window(800, 600, "OpenGL App");
-    //OpenGLRenderer gl_renderer;
-    VulkanRenderer vk_renderer;
-
-    App app(&vk_window, &vk_renderer);
-
-    app.run();
-    
-    return 0;
 }
