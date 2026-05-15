@@ -6,7 +6,10 @@ void App::run() {
     while(!_window->shouldClose()) {
         _window->pollEvents();
 
-        _renderer->draw_triangle();
+        Frame frame{loader.get_frame_z()};
+
+        _renderer->update_frame_z_data(frame);
+        _renderer->draw();
     }
 }
 
@@ -26,6 +29,6 @@ void App::init_renderer() {
         return;
     }
 
-    _renderer->init(_window);
+    _renderer->init(_window, loader.get_grid_xy(), loader.get_bathymetry_z(), loader.get_triangles());
     std::cout << "_renderer inicializado com sucesso\n";
 }

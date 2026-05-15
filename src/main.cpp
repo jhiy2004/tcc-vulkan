@@ -11,16 +11,11 @@
 #include "opengl_renderer.h"
 
 void print_frame(Frame &frame) {
-    int count = 0;
     std::cout << "Points:\n";
-    for (Point p : frame.points) {
-        std::cout << "(" << p.x << ", " << p.y << ", " << p.z << ")" << std::endl;
-
-        if (count > 100) {
-            break;
+    for (float z : frame.z_data) {
+        if (z > 0) {
+            std::cout << "(" << z << ")" << std::endl;
         }
-
-        count++;
     }
 }
 
@@ -32,7 +27,7 @@ void frame_producer(FrameBuffer& fb, Loader& loader) {
             break;
         }
 
-        frame.points = loader.get_frame_points();
+        frame.z_data = loader.get_frame_z();
         fb.push(std::move(frame));
     }
 
@@ -48,27 +43,15 @@ void consumer(FrameBuffer& fb) {
             break;
         }
         count++;
-        std::cout << "loading frame " << count << std::endl;
-        //print_frame(frame);
+        //std::cout << "loading frame " << count << std::endl;
+        print_frame(frame);
     }
 }
 
 int main() {
+    /*
     Loader loader(std::filesystem::path(FILES_DIR) / "example.sim");
     FrameBuffer fb(10);
-
-    GLFWVulkanWindow vk_window(800, 600, "Vulkan App");
-    VulkanRenderer vk_renderer(fb);
-
-    //GLFWOpenGLWindow gl_window(800, 600, "OpenGL App");
-    //OpenGLRenderer gl_renderer;
-
-    App app(&vk_window, &vk_renderer);
-
-    app.run();
-    
-    return 0;
-
 
     std::thread producer(frame_producer, std::ref(fb), std::ref(loader));
 
@@ -76,5 +59,16 @@ int main() {
 
     producer.join();
     return 0;
+    */
 
+    GLFWVulkanWindow vk_window(800, 600, "Vulkan App");
+    //GLFWOpenGLWindow gl_window(800, 600, "OpenGL App");
+    //OpenGLRenderer gl_renderer;
+    VulkanRenderer vk_renderer;
+
+    App app(&vk_window, &vk_renderer, std::filesystem::path(FILES_DIR) / "example.sim");
+
+    app.run();
+    
+    return 0;
 }

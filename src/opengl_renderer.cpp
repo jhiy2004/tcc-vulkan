@@ -1,15 +1,15 @@
 #include "opengl_renderer.h"
 #include <GL/gl.h>
 
-void OpenGLRenderer::init(IWindow *window) {
+void OpenGLRenderer::init(IWindow *window, 
+                          const std::vector<glm::vec2>& grid,
+                          const std::vector<float>& bathymetryZ,
+                          const std::vector<Triangle>& triangles
+                          ) {
     return;
 }
 
-void OpenGLRenderer::draw_triangle() {
+void OpenGLRenderer::draw() {
     glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-}
-
-void OpenGLRenderer::draw_rectangle() {
-    return;
 }

@@ -20,7 +20,10 @@ Loader::Loader(const std::filesystem::path& filename) : file(filename, std::ios:
         std::cout << "Y extent: " << header.y_extent << std::endl;
 
         uint32_t qtd_triangles = 2 * (row-1) * (col-1);
-        frame_points = std::vector<Point>(row * col);
+        frame_z = std::vector<float>(row * col);
+        bathymetry_z = std::vector<float>(row * col);
+        grid_xy = std::vector<glm::vec2>(row * col);
+
         triangles = std::vector<Triangle>(qtd_triangles);
 
         float dx = static_cast<float>(header.x_extent) / (col - 1);
@@ -28,8 +31,8 @@ Loader::Loader(const std::filesystem::path& filename) : file(filename, std::ios:
         for (int i=0; i < row; i++) {
             for (int j=0; j < col; j++) {
                 uint32_t pos = i*col + j;
-                frame_points[pos].x = j * dx;
-                frame_points[pos].y = i * dy;
+                grid_xy[pos].x = j * dx;
+                grid_xy[pos].y = i * dy;
             }
         }
 
@@ -46,8 +49,6 @@ Loader::Loader(const std::filesystem::path& filename) : file(filename, std::ios:
             }
         }
 
-        bathymetry_points = std::vector<Point>(frame_points);
-
         std::vector<float> z_values(row * col);
         file.read(
             reinterpret_cast<char*>(z_values.data()),
@@ -57,7 +58,7 @@ Loader::Loader(const std::filesystem::path& filename) : file(filename, std::ios:
         for (int i=0; i < row; i++) {
             for (int j=0; j < col; j++) {
                 uint32_t pos = i*col + j;
-                bathymetry_points[pos].z = z_values[pos];
+                bathymetry_z[pos] = z_values[pos];
             }
         }
     }
@@ -82,7 +83,7 @@ bool Loader::load_frame() {
         for (int i=0; i < row; i++) {
             for (int j=0; j < col; j++) {
                 uint32_t pos = i*col + j;
-                frame_points[pos].z = z_values[pos];
+                frame_z[pos] = z_values[pos];
             }
         }
         current_frame++;
@@ -96,12 +97,20 @@ std::vector<Triangle> Loader::get_triangles() const {
     return triangles;
 }
 
-std::vector<Point> Loader::get_bathymetry() const {
-    return bathymetry_points;
+std::vector<glm::vec2> Loader::get_grid_xy() const {
+    return grid_xy;
 }
 
-std::vector<Point> Loader::get_frame_points() const {
-    return frame_points;
+std::vector<float> Loader::get_frame_z() const {
+    return frame_z;
+}
+
+std::vector<float> Loader::get_bathymetry_z() const {
+    return bathymetry_z;
+}
+
+std::uint32_t Loader::get_qtd_points() const {
+    return grid_xy.size();
 }
 
 FrameBuffer::FrameBuffer(size_t c) : capacity(c) {}

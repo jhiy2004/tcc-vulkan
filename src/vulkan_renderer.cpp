@@ -5,19 +5,26 @@
 #include <iostream>
 #include <stdexcept>
 #include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan_enums.hpp>
 
-VKAPI_ATTR VkBool32 VKAPI_CALL VulkanRenderer::debug_callback(
+VKAPI_ATTR using vk::VertexInputBindingDescription;
+
+VkBool32 VKAPI_CALL VulkanRenderer::debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     VkDebugUtilsMessageTypeFlagsEXT type,
-    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-    void* pUserData)
-{
-    std::cerr << "validation layer: type " << type
-              << " msg: " << pCallbackData->pMessage << std::endl;
+    const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+    void *pUserData) {
+  std::cerr << "validation layer: type " << type
+            << " msg: " << pCallbackData->pMessage << std::endl;
 
-    return VK_FALSE;
+  return VK_FALSE;
 }
-void VulkanRenderer::init(IWindow* window) {
+void VulkanRenderer::init(
+    IWindow* window, 
+    const std::vector<glm::vec2>& grid,
+    const std::vector<float>& bathymetryZ,
+    const std::vector<Triangle>& triangles
+) {
     _window = window->get_window();
 
     create_instance();
@@ -31,10 +38,16 @@ void VulkanRenderer::init(IWindow* window) {
     create_command_pool();
     create_command_buffer();
     create_sync_objects();
+
+    create_buffers(
+        grid,
+        bathymetryZ,
+        triangles
+    );
     return;
 }
 
-void VulkanRenderer::draw_triangle() {
+void VulkanRenderer::draw() {
     auto fenceResult = _device->waitForFences(*_draw_fence, vk::True, UINT64_MAX);
 
     auto [result, imageIndex] = _swap_chain.acquireNextImage(UINT64_MAX, *_present_complete_semaphore, nullptr);
@@ -78,10 +91,6 @@ void VulkanRenderer::draw_triangle() {
             break;        // an unexpected result is returned!
     }
 
-    return;
-}
-
-void VulkanRenderer::draw_rectangle() {
     return;
 }
 
@@ -367,22 +376,36 @@ void VulkanRenderer::create_graphics_pipeline() {
 
     vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
-    vk::VertexInputBindingDescription bindingDesc{};
-    bindingDesc.binding = 0;
-    bindingDesc.stride = sizeof(Point);
-    bindingDesc.inputRate = vk::VertexInputRate::eVertex;
+    std::array<VertexInputBindingDescription, 2> bindings{};
+    // Binding for the grid_xy_data
+    bindings[0].binding = 0;
+    bindings[0].stride = sizeof(glm::vec2);
+    bindings[0].inputRate = vk::VertexInputRate::eVertex;
 
-    vk::VertexInputAttributeDescription attrDesc{};
-    attrDesc.location = 0;
-    attrDesc.binding = 0;
-    attrDesc.format = vk::Format::eR32G32B32Sfloat;
-    attrDesc.offset = 0;
+    // Binding for the z_data
+    bindings[1].binding = 1;
+    bindings[1].stride = sizeof(float);
+    bindings[1].inputRate = vk::VertexInputRate::eVertex;
+
+    std::array<vk::VertexInputAttributeDescription, 2> attrs{};
+
+    // Attribute for the grid_xy_data
+    attrs[0].location = 0;
+    attrs[0].binding = 0;
+    attrs[0].format = vk::Format::eR32G32Sfloat;
+    attrs[0].offset = 0;
+
+    // Attribute for the z_data
+    attrs[1].location = 1;
+    attrs[1].binding = 1;
+    attrs[1].format = vk::Format::eR32Sfloat;
+    attrs[1].offset = 0;
 
     vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
-    vertexInputInfo.vertexBindingDescriptionCount = 1;
-    vertexInputInfo.pVertexBindingDescriptions = &bindingDesc;
-    vertexInputInfo.vertexAttributeDescriptionCount = 1;
-    vertexInputInfo.pVertexAttributeDescriptions = &attrDesc;
+    vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(bindings.size());
+    vertexInputInfo.pVertexBindingDescriptions = bindings.data();
+    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attrs.size());
+    vertexInputInfo.pVertexAttributeDescriptions = attrs.data();
 
     vk::PipelineInputAssemblyStateCreateInfo inputAssembly{  .topology = vk::PrimitiveTopology::eTriangleList };
 
@@ -481,91 +504,22 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex) {
     // Begin rendering
     _command_buffer.beginRendering(renderingInfo);
 
-    // Rendering commands will go here
-
-
-    // Testes com buffer
-    Point points[] = {
-        {0.0f, -0.5f, 0.0f},
-        {0.5f, 0.5f, 0.0f},
-        {-0.5f, 0.5f, 0.0f},
-    };
-
-    VkBuffer vertexBuffer;
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = sizeof(points);
-    bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    if (vkCreateBuffer(**_device, &bufferInfo, nullptr, &vertexBuffer) != VK_SUCCESS) {
-        std::cout << "Falha ao criar o buffer do triangulo" << std::endl; 
-    }
-
-    VkMemoryRequirements memReq;
-    vkGetBufferMemoryRequirements(**_device, vertexBuffer, &memReq);
-
-    // --------------------------------------------
-    // 3. Escolher tipo de memória HOST_VISIBLE
-    // --------------------------------------------
-    VkPhysicalDeviceMemoryProperties memProps;
-    vkGetPhysicalDeviceMemoryProperties(**_physical_device, &memProps);
-
-    uint32_t memoryTypeIndex = 0;
-    for (uint32_t i = 0; i < memProps.memoryTypeCount; i++)
-    {
-        bool supported = memReq.memoryTypeBits & (1 << i);
-
-        bool wanted =
-            (memProps.memoryTypes[i].propertyFlags &
-            (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
-            ==
-            (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-        if (supported && wanted) {
-            memoryTypeIndex = i;
-            break;
-        }
-    }
-
-    // --------------------------------------------
-    // 4. Alocar memória
-    // --------------------------------------------
-    VkDeviceMemory vertexMemory;
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memReq.size;
-    allocInfo.memoryTypeIndex = memoryTypeIndex;
-
-    vkAllocateMemory(**_device, &allocInfo, nullptr, &vertexMemory);
-
-
-    // --------------------------------------------
-    // 5. Associar buffer + memória
-    // --------------------------------------------
-    vkBindBufferMemory(**_device, vertexBuffer, vertexMemory, 0);
-
-    // --------------------------------------------
-    // 6. Copiar vértices com memcpy
-    // --------------------------------------------
-    void* data = nullptr;
-
-    vkMapMemory(**_device, vertexMemory, 0, sizeof(points), 0, &data);
-    memcpy(data, points, sizeof(points));
-    vkUnmapMemory(**_device, vertexMemory);
-
-    VkDeviceSize offsets[] = {0};
-
-    vkCmdBindVertexBuffers(*_command_buffer, 0, 1, &vertexBuffer, offsets);
-    // Fim testes com buffer
-
     _command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, _graphics_pipeline);
     _command_buffer.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(_swap_chain_extent.width), static_cast<float>(_swap_chain_extent.height), 0.0f, 1.0f));
     _command_buffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), _swap_chain_extent));
-    _command_buffer.draw(3, 1, 0, 0);
+
+    // Bind all buffers to their respective location, binding and offsets
+    std::array<VkBuffer, 2> buffers = { _grid_xy_data, _bathymetry_z_data};
+    VkDeviceSize offsets[] = {0, 0};
+
+    vkCmdBindVertexBuffers(*_command_buffer, 0, buffers.size(), buffers.data(), offsets);
+    vkCmdBindIndexBuffer(*_command_buffer, _index_data, 0, VK_INDEX_TYPE_UINT32);
+
+    _command_buffer.drawIndexed(_indices_size, 1, 0, 0, 0);
+
+    vkCmdBindVertexBuffers(*_command_buffer, 1, 1, &_frame_z_data, &offsets[0]);
+
+    _command_buffer.drawIndexed(_indices_size, 1, 0, 0, 0);
 
     // End rendering
     _command_buffer.endRendering();
@@ -658,4 +612,179 @@ void VulkanRenderer::recreate_swap_chain() {
 
     create_swap_chain();
     create_image_views();
+}
+
+uint32_t VulkanRenderer::find_memory_type(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+    // Query memory properties
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(**_physical_device, &memProperties);
+
+    for (uint32_t i = 0; memProperties.memoryTypeCount; i++){
+        if (
+            (typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties
+        ) {
+            return i;
+        }
+    }
+
+    throw std::runtime_error("failed to find suitable memory type!");
+}
+
+// Helper function to copy data from a source buffer(usually a host visible memory) to
+// a destination buffer (usually a device local memory)
+void VulkanRenderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = *_command_pool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer commandBuffer;
+    vkAllocateCommandBuffers(**_device, &allocInfo, &commandBuffer);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+    VkBufferCopy copyRegion{};
+    copyRegion.srcOffset = 0;
+    copyRegion.dstOffset = 0;
+    copyRegion.size = size;
+    vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+    vkEndCommandBuffer(commandBuffer);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+
+    vkQueueSubmit(**_graphics_queue, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(**_graphics_queue);
+
+    vkFreeCommandBuffers(**_device, *_command_pool, 1, &commandBuffer);
+}
+
+// Helper function to create a buffer with allocated memory
+void VulkanRenderer::create_buffer(
+    VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer,
+    VkDeviceMemory& bufferMemory
+) {
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(**_device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create buffer!");
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(**_device, buffer, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = find_memory_type(memRequirements.memoryTypeBits, properties);
+
+    if (vkAllocateMemory(**_device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+        throw std::runtime_error("failed to allocate buffer memory!");
+    }
+
+    vkBindBufferMemory(**_device, buffer, bufferMemory, 0);
+}
+
+// Function to initialize the VkBuffer structures for a simulation
+void VulkanRenderer::create_buffers(
+    const std::vector<glm::vec2>& grid,
+    const std::vector<float>& bathymetryZ,
+    const std::vector<Triangle>& triangles
+ ) {
+    // VkBuffer _frame_z_data creation
+    VkDeviceSize size = bathymetryZ.size();
+    create_buffer(size,
+                  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+                  | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                  _frame_z_data, _frame_z_data_mem);
+
+    create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                  | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                  _staging_buffer, _staging_buffer_mem);
+
+    // VkBuffer _bathymetry_z_data creation
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                  | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                  stagingBuffer, stagingBufferMemory);
+
+    create_buffer(size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+                  | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                  _bathymetry_z_data, _bathymetry_z_data_mem);
+
+    void* data;
+    vkMapMemory(**_device, stagingBufferMemory, 0, size, 0, &data);
+    memcpy(data, bathymetryZ.data(), (size_t) size);
+    vkUnmapMemory(**_device, stagingBufferMemory);
+
+    copyBuffer(stagingBuffer, _bathymetry_z_data, size);
+
+    // VkBuffer _grid_xy_data creation
+    size = grid.size();
+
+    create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                  | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                  stagingBuffer, stagingBufferMemory);
+
+    create_buffer(size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+                  | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                  _grid_xy_data, _grid_xy_data_mem);
+
+    vkMapMemory(**_device, stagingBufferMemory, 0, size, 0, &data);
+    memcpy(data, grid.data(), (size_t) size);
+    vkUnmapMemory(**_device, stagingBufferMemory);
+
+    copyBuffer(stagingBuffer, _grid_xy_data, size);
+
+    // VkBuffer _index_data creation
+    size = sizeof(Triangle) * triangles.size();
+    _indices_size = size / sizeof(uint32_t);
+
+    create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                  | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                  stagingBuffer, stagingBufferMemory);
+
+    create_buffer(size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+                  | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                  _index_data, _index_data_mem);
+
+    vkMapMemory(**_device, stagingBufferMemory, 0, size, 0, &data);
+    memcpy(data, triangles.data(), (size_t) size);
+    vkUnmapMemory(**_device, stagingBufferMemory);
+
+    copyBuffer(stagingBuffer, _index_data, size);
+
+    return;
+}
+
+void VulkanRenderer::update_frame_z_data(Frame& frame) {
+    auto size = sizeof(float) * frame.z_data.size();
+
+    void* data;
+    vkMapMemory(**_device, _staging_buffer_mem, 0, size, 0, &data);
+    memcpy(data, frame.z_data.data(), (size_t) size);
+    vkUnmapMemory(**_device, _staging_buffer_mem);
+
+    copyBuffer(_staging_buffer, _frame_z_data, size);
 }

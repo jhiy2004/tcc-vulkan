@@ -16,10 +16,14 @@ import vulkan_hpp;
 
 class VulkanRenderer : public IRenderer {
 public:
-    VulkanRenderer(FrameBuffer& fb) : _frame_buffer(fb) {};
-    void init(IWindow* window) override;
-    void draw_triangle() override;
-    void draw_rectangle() override;
+    VulkanRenderer(){};
+    void init(IWindow* window,
+              const std::vector<glm::vec2>& grid,
+              const std::vector<float>& bathymetryZ,
+              const std::vector<Triangle>& triangles
+              ) override;
+    void draw() override;
+    void update_frame_z_data(Frame& frame) override;
 
 private:
     void create_instance();
@@ -63,8 +67,37 @@ private:
     void recreate_swap_chain();
     void cleanup_swap_chain();
 
-    FrameBuffer& _frame_buffer;
-    Frame _current_frame;
+
+    uint32_t find_memory_type(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+    void create_buffer(
+        VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer,
+        VkDeviceMemory& bufferMemory
+    );
+    void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+
+    void create_buffers(
+        const std::vector<glm::vec2>& grid,
+        const std::vector<float>& bathymetryZ,
+        const std::vector<Triangle>& triangles
+    );
+
+    // Changes every frame
+    VkBuffer _frame_z_data;
+    VkBuffer _staging_buffer;
+
+    // Only changes one time per simulation
+    VkBuffer _bathymetry_z_data;
+    VkBuffer _grid_xy_data;
+    VkBuffer _index_data;
+
+    VkDeviceMemory _staging_buffer_mem;
+    VkDeviceMemory _frame_z_data_mem;
+    VkDeviceMemory _bathymetry_z_data_mem;
+    VkDeviceMemory _grid_xy_data_mem;
+    VkDeviceMemory _index_data_mem;
+
+    // Indices information
+    uint32_t _indices_size;
 
     bool _framebuffer_resized = false;
     std::vector<const char*> required_device_extension = {vk::KHRSwapchainExtensionName};

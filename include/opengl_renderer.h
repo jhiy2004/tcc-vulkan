@@ -4,8 +4,11 @@
 
 class OpenGLRenderer : public IRenderer {
 public:
-    void init(IWindow* window) override;
-    void draw_triangle() override;
-    void draw_rectangle() override;
+    void init(IWindow* window, 
+              const std::vector<glm::vec2>& grid,
+              const std::vector<float>& bathymetryZ,
+              const std::vector<Triangle>& triangles
+              ) override;
+    void draw() override;
 };
 

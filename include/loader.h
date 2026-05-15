@@ -1,5 +1,6 @@
 #pragma once
 
+#include <glm/glm.hpp>
 #include <filesystem>
 #include <fstream>
 #include <vector>
@@ -29,7 +30,7 @@ struct __attribute__((packed)) SimulationHeader {
 };
 
 struct Frame {
-    std::vector<Point> points;  
+    std::vector<float> z_data;  
 };
 
 class FrameBuffer {
@@ -56,9 +57,11 @@ public:
 
     bool load_frame();
 
+    std::uint32_t get_qtd_points() const;
     std::vector<Triangle> get_triangles() const;
-    std::vector<Point> get_bathymetry() const;
-    std::vector<Point> get_frame_points() const;
+    std::vector<glm::vec2> get_grid_xy() const;
+    std::vector<float> get_frame_z() const;
+    std::vector<float> get_bathymetry_z() const;
 private:
     std::ifstream file;
     int current_frame{};
@@ -67,6 +70,7 @@ private:
     uint32_t row;
     uint32_t col;
     std::vector<Triangle> triangles;
-    std::vector<Point> frame_points;
-    std::vector<Point> bathymetry_points;
+    std::vector<glm::vec2> grid_xy;
+    std::vector<float> bathymetry_z;
+    std::vector<float> frame_z;
 };

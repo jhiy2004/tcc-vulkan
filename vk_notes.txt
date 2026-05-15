@@ -1,0 +1,116 @@
+Uma aplicacao vulkan e construida seguindo o padrao loader,
+onde a aplicacao se comunica com o loader, que por sua vez
+se comunica com layers e um dispositivo fisico, para interagir
+com o dispositivo fisico e necessario que o programador
+crie uma instancia VkDevice, que representa uma instancia
+do driver do dispositivo fisico.
+
+O computador que esta rodando a aplicacao vulkan pode ter
+multiplas GPUs, sendo papel da aplicacao decidir qual dispositivo
+fisico devera ser usado, para isso e papel do programador
+consultar as properties, features e extensions disponiveis
+nos dispositivos fisicos e escolher a que for melhor para
+a aplicacao.
+
+Para lidar processar os dados do vertices, e necessario
+que os dados sejam submetidos a um pipeline grafico,
+onde o programador pode alterar o comportamento das
+etapas vertex shader e fragment shader com uma linguagem
+de shader (GLSL e SLANG).
+
+Ao compilar o codigo fonte de um programa escrito em linguagem
+de shader se tem um arquivo chamado SPIRV, que deve ser carregado
+no codigo responsavel por criar o pipeline grafico.
+
+O vertex shader e chamado para cada triangulo passado para
+o vulkan, responsavel por rodar algoritmos de rasterizacao
+para descobrir todos os pixels a serem coloridos, esse pixels
+descobertos sao passados ao fragment shader, responsavel por
+colorir os pixels, com cores predefinidas, texturas e iluminacao.
+
+Um Format em vulkan define como a memoria de uma VkImage esta
+organizada em memoria, por exemplo, um Format define que uma
+VkImage e composta por 3 componentes de 8 bits, 4 componentes de
+8 bits e assim por diante, alem do tamanho, um Format define o
+alinhamento da memoria, caso o alinhamento seja de 32 bits, o
+endereco inicial dos dados deve ser um multiplo de 32.
+
+Para submeter comandos a GPU, e necessario que exista uma Queue,
+uma Queue Family pode ser um ou mais dos seguintes tipos: 
+Graphics, Compute e Transfer. Uma Graphics Queue aceita comandos
+do tipo vkDraw*, usados para fazer desenho usando o graphics
+pipeline. Uma Compute Queue aceita comandos do tipo vkDispatch,
+normalmente usado para realizar calculos complexos. Uma Transfer
+Queue e usada para transferir dados entre host e memoria do
+dispositivo.
+
+Para apresentar imagens na tela de um dispositivo que suporta
+vulkan, e necessario que seja primeiramente criada uma janela
+no aparelho, em seguida e necessario que seja criada uma
+instancia de um objeto VkSurfaceKHR, o objeto em si e agnostico
+de plataforma, mas sua criacao e dependente da plataforma em
+que foi criada a janela. Tendo um objeto de surface e necessario
+criar um objeto VkSwapchainKHR, que prove a habilidade de
+apresentar as imagens na surface atraves de objeto VkImage, a
+swapchain pode operar em diversos modos diferentes, cada um
+com sua utilidade.
+
+No vulkan e responsabilidade do programador cuidar da
+sincronizacao dos comandos a GPU, sincronizando estagios de
+pipelines de Queues diferentes usando pipeline barriers,
+sincronizando entre command buffers com Event, sincronizando
+entre CPU e GPU usando Fences e sincronizando GPU e GPU
+usando Semaphores.
+
+Alocacao de memoria em vulkan e uma das partes mais dificeis
+do vulkan, por isso muitos desenvolvedores optam por usar a
+lib VMA (Vulkan Memory Allocator). Existem 2 tipos de GPU,
+discreta e integrada. A memoria pode ser HOST_VISIBLE ou 
+DEVICE_LOCAL, ou ate mesmo os dois ao mesmo tempo (UMA).
+Normalmente e criado um stage buffer, que basicamente e
+uma memoria que a CPU tem acesso de leitura e escrita, a
+ideia do staging buffer e que sejam copiados dados para ele
+usando memcpy e depois sejam copiados para uma memoria acessivel
+somente pela GPU usando vkCmdCopyBuffer(), pois o acesso e
+mais rapido
+
+Alocacao sparse e uma forma de se alocar recursos como VkBuffer
+e VkImage, mas diferentemente do convencional, o conjunto de 
+enderecos de memoria alocados nao precisam ser contiguous, na
+alocacao sparse sao usados blocos de memoria fixos de memorias
+de dispositivos diferentes.
+
+A criacao de um pipeline e custosa, uma das maneiras de contornar
+isso e por meio da criacao de um cache que e salva em memoria
+secundaria, assim e possivel aproveitar o pipeline antigo.
+
+VkDeviceMemory e um objeto alocado por meio da funcao
+vkAllocateMemory.
+
+Uma das formas de passar dados do HOST para o vulkan e usar 
+input attributes, que sao interpretados no vertex shader,
+portanto durante a criacao do estagio de vertex shader do
+pipeline grafico deve ser adicionado a flag 
+VK_SHADER_STAGE_VERTEX_BIT. Com o vertex shader configurado,
+cabe ao programador vincular os dados a um VkBuffer antes
+da hora de desenhar. Um input attribute possui um binding
+e location, essas informacoes devem bater entre o shader
+e o codigo para desenhar corretamente.
+
+Um descriptor set e uma estrutura de dados que define como
+os dados estao organizados em um buffer, buffer view, image
+e etc. Assim e possivel, por exemplo, usar um mesmo buffer
+para armazenar informacoes de vertices e cores, e diferenciar
+as informacoes por meio de bindings ao ler os dados no
+shader.
+
+A arquitetura ficou definida em usar 3 VkBuffer, um deles
+será usado para armazenar as coordenas x e y do grid, já
+traduzidas para valores físicos da simulação. O segundo será
+usado para armazenar os valores de z da superfície livre do
+frame atual. O terceiro será os valores de z da batimetria.
+O primeiro e segundo VkBuffer será atualizado apenas uma vez
+por simulação, enquanto o segundo será constantemente atualizado.
+Além dos vertex buffers, será usado apenas 1 index buffer para
+armazenar as informações de triângulos para usar a renderiazação
+de triângulos indexada.
