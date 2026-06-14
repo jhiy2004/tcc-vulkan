@@ -29,3 +29,7 @@ void GLFWOpenGLWindow::pollEvents() {
 bool GLFWOpenGLWindow::shouldClose() {
     return glfwWindowShouldClose(_window);
 }
+
+void GLFWOpenGLWindow::set_camera(Camera *camera) {
+    _camera = camera;
+}

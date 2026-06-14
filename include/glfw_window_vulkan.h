@@ -19,6 +19,10 @@ public:
         return _window;
     }
 
+    void set_camera(Camera *camera) override;
+    static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+    void camera_input_handler(int key, int action);
+
     ~GLFWVulkanWindow() {
         glfwDestroyWindow(_window);
         glfwTerminate();
@@ -28,4 +32,5 @@ private:
     uint32_t _height;
     std::string _title;
     GLFWwindow *_window = nullptr;
+    Camera *_camera = nullptr;
 };

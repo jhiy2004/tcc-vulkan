@@ -19,6 +19,7 @@ void App::init_window() {
         return;
     }
 
+    _window->set_camera(&_renderer->get_camera());
     _window->init();
     std::cout << "_window inicializado com sucesso\n";
 }

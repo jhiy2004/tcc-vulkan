@@ -13,6 +13,7 @@ import vulkan_hpp;
 #endif
 
 #include "loader.h"
+#include "camera.h"
 
 class VulkanRenderer : public IRenderer {
 public:
@@ -24,6 +25,7 @@ public:
               ) override;
     void draw() override;
     void update_frame_z_data(Frame& frame) override;
+    Camera& get_camera() override;
 
 private:
     void create_instance();
@@ -34,6 +36,10 @@ private:
     void create_surface();
     void create_swap_chain();
     void create_graphics_pipeline();
+
+    void update_scene();
+
+    Camera camera;
 
     vk::SurfaceFormatKHR choose_swap_surface_format(std::vector<vk::SurfaceFormatKHR> const &availableFormats);
     vk::PresentModeKHR choose_swap_present_mode(std::vector<vk::PresentModeKHR> const &availablePresentModes);

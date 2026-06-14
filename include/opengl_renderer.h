@@ -10,5 +10,9 @@ public:
               const std::vector<Triangle>& triangles
               ) override;
     void draw() override;
+
+    Camera& get_camera() override;
+private:
+    Camera camera;
 };
 

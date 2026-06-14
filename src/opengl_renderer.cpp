@@ -13,3 +13,7 @@ void OpenGLRenderer::draw() {
     glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 }
+
+Camera& OpenGLRenderer::get_camera() {
+    return camera;
+}

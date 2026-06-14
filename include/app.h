@@ -1,8 +1,6 @@
 #pragma once
 
-#include <cstdint>
 #include <filesystem>
-#include <string_view>
 #include "loader.h"
 #include "renderer.h"
 #include "window.h"

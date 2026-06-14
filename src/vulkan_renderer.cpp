@@ -1,4 +1,6 @@
 #include "vulkan_renderer.h"
+#include "glm/ext/matrix_clip_space.hpp"
+#include "glm/trigonometric.hpp"
 #include "loader.h"
 #include "util.h"
 
@@ -6,6 +8,7 @@
 #include <stdexcept>
 #include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_enums.hpp>
+#include <glm/ext/matrix_transform.hpp>
 
 VKAPI_ATTR using vk::VertexInputBindingDescription;
 
@@ -787,4 +790,14 @@ void VulkanRenderer::update_frame_z_data(Frame& frame) {
     vkUnmapMemory(**_device, _staging_buffer_mem);
 
     copyBuffer(_staging_buffer, _frame_z_data, size);
+}
+
+void VulkanRenderer::update_scene() {
+    camera.update();
+    glm::mat4 view = camera.getViewMatrix();
+    glm::mat4 proj = glm::perspective(glm::radians(70.0f), (float)_swap_chain_extent.width / (float)_swap_chain_extent.height, 0.1f, 1000.0f);
+}
+
+Camera& VulkanRenderer::get_camera() {
+    return camera;
 }
