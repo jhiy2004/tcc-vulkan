@@ -4,6 +4,7 @@
 #include "loader.h"
 #include "util.h"
 
+#include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 #include <vulkan/vulkan_core.h>
@@ -37,6 +38,9 @@ void VulkanRenderer::init(
     create_logical_device();
     create_swap_chain();
     create_image_views();
+    
+    create_descriptor_set_layout();
+
     create_graphics_pipeline();
     create_command_pool();
     create_command_buffer();
@@ -47,11 +51,17 @@ void VulkanRenderer::init(
         bathymetryZ,
         triangles
     );
+
+    create_uniform_buffers();
+    create_descriptor_pool();
+    create_descriptor_sets();
     return;
 }
 
 void VulkanRenderer::draw() {
-    auto fenceResult = _device->waitForFences(*_draw_fence, vk::True, UINT64_MAX);
+    std::cout << "Started draw" << std::endl;
+
+    auto fenceResult = _device.waitForFences(*_draw_fence, vk::True, UINT64_MAX);
 
     auto [result, imageIndex] = _swap_chain.acquireNextImage(UINT64_MAX, *_present_complete_semaphore, nullptr);
 
@@ -61,7 +71,7 @@ void VulkanRenderer::draw() {
     }
 
     record_command_buffer(imageIndex);
-    _device->resetFences(*_draw_fence);
+    _device.resetFences(*_draw_fence);
 
     vk::PipelineStageFlags waitDestinationStageMask( vk::PipelineStageFlagBits::eColorAttachmentOutput );
     const vk::SubmitInfo submitInfo{
@@ -94,7 +104,7 @@ void VulkanRenderer::draw() {
             break;        // an unexpected result is returned!
     }
 
-    return;
+    std::cout << "Ended draw" << std::endl;
 }
 
 std::vector<const char*> VulkanRenderer::get_required_instance_extensions()
@@ -161,15 +171,26 @@ void VulkanRenderer::create_instance() {
 void VulkanRenderer::setup_debug_messenger() {
     if (!enable_validation_layers) return;
 
-    vk::DebugUtilsMessageSeverityFlagsEXT severityFlags(vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
-                                                        vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
-                                                        vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
-    vk::DebugUtilsMessageTypeFlagsEXT     messageTypeFlags(
-        vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
-    vk::DebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfoEXT{.messageSeverity = severityFlags,
-        .messageType     = messageTypeFlags,
-        .pfnUserCallback = &VulkanRenderer::debug_callback};
-    *_debug_messenger = _instance->createDebugUtilsMessengerEXT( debugUtilsMessengerCreateInfoEXT );
+    vk::DebugUtilsMessageSeverityFlagsEXT severityFlags(
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eError
+    );
+
+    vk::DebugUtilsMessageTypeFlagsEXT messageTypeFlags(
+        vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+        vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+        vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation
+    );
+
+    vk::DebugUtilsMessengerCreateInfoEXT createInfo{
+        .messageSeverity = severityFlags,
+        .messageType = messageTypeFlags,
+        .pfnUserCallback = &VulkanRenderer::debug_callback
+    };
+
+    _debug_messenger =
+        _instance->createDebugUtilsMessengerEXT(createInfo);
 }
 
 void VulkanRenderer::pick_physical_device() {
@@ -217,8 +238,10 @@ bool VulkanRenderer::is_device_suitable(vk::raii::PhysicalDevice const & physica
     auto features =
         physical_device
         .template getFeatures2<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
-    bool supports_required_features = features.template get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
-        features.template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState;
+    bool supports_required_features =
+        features.get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
+        features.get<vk::PhysicalDeviceVulkan13Features>().synchronization2 &&
+        features.get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState;
 
     return supports_vulkan_1_3 && supports_graphics && supports_required_features && supports_all_required_extensions;
 }
@@ -244,10 +267,19 @@ void VulkanRenderer::create_logical_device() {
     }
 
     // query for Vulkan 1.3 features
-    vk::StructureChain<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT> featureChain = {
-        {},                                   // vk::PhysicalDeviceFeatures2
-        {.dynamicRendering = true},           // vk::PhysicalDeviceVulkan13Features
-        {.extendedDynamicState = true}        // vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT
+    vk::StructureChain<
+        vk::PhysicalDeviceFeatures2,
+        vk::PhysicalDeviceVulkan13Features,
+        vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT
+    > featureChain = {
+        {},
+        {
+            .synchronization2 = VK_TRUE,
+            .dynamicRendering = VK_TRUE,
+        },
+        {
+            .extendedDynamicState = VK_TRUE
+        }
     };
 
     // create a Device
@@ -259,9 +291,9 @@ void VulkanRenderer::create_logical_device() {
         .enabledExtensionCount   = static_cast<uint32_t>(required_device_extension.size()),
         .ppEnabledExtensionNames = required_device_extension.data()};
 
-    _device = std::make_unique<vk::raii::Device>( *_physical_device, deviceCreateInfo );
+    _device = vk::raii::Device(*_physical_device, deviceCreateInfo);
     _graphics_index = queueIndex;
-    _graphics_queue = std::make_unique<vk::raii::Queue>(*_device, queueIndex, 0);
+    _graphics_queue = std::make_unique<vk::raii::Queue>(_device, queueIndex, 0);
 #ifndef NDEBUG
     std::cout << "Created Logical Device" << std::endl;
 #endif
@@ -326,7 +358,7 @@ void VulkanRenderer::create_swap_chain() {
         .presentMode      = choose_swap_present_mode(availablePresentModes),
         .clipped          = true
     };
-    _swap_chain        = vk::raii::SwapchainKHR(*_device, swapChainCreateInfo);
+    _swap_chain        = vk::raii::SwapchainKHR(_device, swapChainCreateInfo);
     _swap_chain_images = _swap_chain.getImages();
 
 #ifndef NDEBUG
@@ -361,7 +393,7 @@ void VulkanRenderer::create_image_views() {
 
     for (auto &image : _swap_chain_images) {
         imageViewCreateInfo.image = image;
-        _swap_chain_image_views.emplace_back( *_device, imageViewCreateInfo );
+        _swap_chain_image_views.emplace_back( _device, imageViewCreateInfo );
     }
 
 #ifndef NDEBUG
@@ -439,10 +471,12 @@ void VulkanRenderer::create_graphics_pipeline() {
         .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA};
     vk::PipelineColorBlendStateCreateInfo colorBlending{.logicOpEnable = vk::False, .logicOp = vk::LogicOp::eCopy, .attachmentCount = 1, .pAttachments = &colorBlendAttachment};
 
-    vk::raii::PipelineLayout pipelineLayout = nullptr;
-
-    vk::PipelineLayoutCreateInfo pipelineLayoutInfo{  .setLayoutCount = 0, .pushConstantRangeCount = 0 };
-    pipelineLayout = vk::raii::PipelineLayout( *_device, pipelineLayoutInfo );
+    vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
+        .setLayoutCount = 1,
+        .pSetLayouts = &*descriptorSetLayout,
+        .pushConstantRangeCount = 0
+    };
+    pipelineLayout = vk::raii::PipelineLayout( _device, pipelineLayoutInfo );
 
     vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
         {.stageCount          = 2,
@@ -458,7 +492,7 @@ void VulkanRenderer::create_graphics_pipeline() {
             .renderPass          = nullptr},
         {.colorAttachmentCount = 1, .pColorAttachmentFormats = &_swap_chain_surface_format.format}};
 
-    _graphics_pipeline = vk::raii::Pipeline(*_device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+    _graphics_pipeline = vk::raii::Pipeline(_device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 #ifndef NDEBUG
     std::cout << "Created graphics pipeline" << std::endl;
 #endif
@@ -467,12 +501,14 @@ void VulkanRenderer::create_graphics_pipeline() {
 [[nodiscard]]
 vk::raii::ShaderModule VulkanRenderer::create_shader_module(const std::vector<char> &code) const {
     vk::ShaderModuleCreateInfo createInfo{ .codeSize = code.size() * sizeof(char), .pCode = reinterpret_cast<const uint32_t*>(code.data()) };
-    vk::raii::ShaderModule shaderModule{ *_device, createInfo };
+    vk::raii::ShaderModule shaderModule{ _device, createInfo };
 
     return shaderModule;
 }
 
 void VulkanRenderer::record_command_buffer(uint32_t imageIndex) {
+    std::cout << "Started record cmd buffer" << std::endl;
+
     _command_buffer.begin({});
 
     // Transition the image layout for rendering
@@ -508,6 +544,8 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex) {
     _command_buffer.beginRendering(renderingInfo);
 
     _command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, _graphics_pipeline);
+    _command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, *descriptorSets[0], nullptr);
+
     _command_buffer.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(_swap_chain_extent.width), static_cast<float>(_swap_chain_extent.height), 0.0f, 1.0f));
     _command_buffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), _swap_chain_extent));
 
@@ -539,12 +577,14 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex) {
     );
 
     _command_buffer.end();
+
+    std::cout << "Ended record cmd buffer" << std::endl;
 }
 
 void VulkanRenderer::create_command_pool() {
     vk::CommandPoolCreateInfo poolInfo{ .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer, .queueFamilyIndex = _graphics_index };
 
-    _command_pool = vk::raii::CommandPool(*_device, poolInfo);
+    _command_pool = vk::raii::CommandPool(_device, poolInfo);
 #ifndef NDEBUG
     std::cout << "Created command pool" << std::endl;
 #endif
@@ -553,7 +593,7 @@ void VulkanRenderer::create_command_pool() {
 void VulkanRenderer::create_command_buffer() {
     vk::CommandBufferAllocateInfo allocInfo{ .commandPool = _command_pool, .level = vk::CommandBufferLevel::ePrimary, .commandBufferCount = 1 };
 
-    _command_buffer = std::move(vk::raii::CommandBuffers(*_device, allocInfo).front());
+    _command_buffer = std::move(vk::raii::CommandBuffers(_device, allocInfo).front());
 #ifndef NDEBUG
     std::cout << "Created command buffer" << std::endl;
 #endif
@@ -595,9 +635,9 @@ void VulkanRenderer::transition_image_layout(
 }
 
 void VulkanRenderer::create_sync_objects() {
-    _present_complete_semaphore = vk::raii::Semaphore(*_device, vk::SemaphoreCreateInfo());
-    _render_finished_semaphore = vk::raii::Semaphore(*_device, vk::SemaphoreCreateInfo());
-    _draw_fence = vk::raii::Fence(*_device, {.flags = vk::FenceCreateFlagBits::eSignaled});
+    _present_complete_semaphore = vk::raii::Semaphore(_device, vk::SemaphoreCreateInfo());
+    _render_finished_semaphore = vk::raii::Semaphore(_device, vk::SemaphoreCreateInfo());
+    _draw_fence = vk::raii::Fence(_device, {.flags = vk::FenceCreateFlagBits::eSignaled});
 #ifndef NDEBUG
     std::cout << "Created sync objects" << std::endl;
 #endif
@@ -609,7 +649,7 @@ void VulkanRenderer::cleanup_swap_chain() {
 }
 
 void VulkanRenderer::recreate_swap_chain() {
-    _device->waitIdle();
+    _device.waitIdle();
 
     cleanup_swap_chain();
 
@@ -643,7 +683,7 @@ void VulkanRenderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDevice
     allocInfo.commandBufferCount = 1;
 
     VkCommandBuffer commandBuffer;
-    vkAllocateCommandBuffers(**_device, &allocInfo, &commandBuffer);
+    vkAllocateCommandBuffers(*_device, &allocInfo, &commandBuffer);
 
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -667,7 +707,7 @@ void VulkanRenderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDevice
     vkQueueSubmit(**_graphics_queue, 1, &submitInfo, VK_NULL_HANDLE);
     vkQueueWaitIdle(**_graphics_queue);
 
-    vkFreeCommandBuffers(**_device, *_command_pool, 1, &commandBuffer);
+    vkFreeCommandBuffers(*_device, *_command_pool, 1, &commandBuffer);
 }
 
 // Helper function to create a buffer with allocated memory
@@ -681,23 +721,23 @@ void VulkanRenderer::create_buffer(
     bufferInfo.usage = usage;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    if (vkCreateBuffer(**_device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+    if (vkCreateBuffer(*_device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
         throw std::runtime_error("failed to create buffer!");
     }
 
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(**_device, buffer, &memRequirements);
+    vkGetBufferMemoryRequirements(*_device, buffer, &memRequirements);
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
     allocInfo.memoryTypeIndex = find_memory_type(memRequirements.memoryTypeBits, properties);
 
-    if (vkAllocateMemory(**_device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+    if (vkAllocateMemory(*_device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
         throw std::runtime_error("failed to allocate buffer memory!");
     }
 
-    vkBindBufferMemory(**_device, buffer, bufferMemory, 0);
+    vkBindBufferMemory(*_device, buffer, bufferMemory, 0);
 }
 
 // Function to initialize the VkBuffer structures for a simulation
@@ -707,7 +747,7 @@ void VulkanRenderer::create_buffers(
     const std::vector<Triangle>& triangles
  ) {
     // VkBuffer _frame_z_data creation
-    VkDeviceSize size = bathymetryZ.size();
+    VkDeviceSize size = sizeof(float) * bathymetryZ.size();
     create_buffer(size,
                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -733,14 +773,14 @@ void VulkanRenderer::create_buffers(
                   _bathymetry_z_data, _bathymetry_z_data_mem);
 
     void* data;
-    vkMapMemory(**_device, stagingBufferMemory, 0, size, 0, &data);
+    vkMapMemory(*_device, stagingBufferMemory, 0, size, 0, &data);
     memcpy(data, bathymetryZ.data(), (size_t) size);
-    vkUnmapMemory(**_device, stagingBufferMemory);
+    vkUnmapMemory(*_device, stagingBufferMemory);
 
     copyBuffer(stagingBuffer, _bathymetry_z_data, size);
 
     // VkBuffer _grid_xy_data creation
-    size = grid.size();
+    size = sizeof(glm::vec2) * grid.size();
 
     create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
@@ -752,9 +792,9 @@ void VulkanRenderer::create_buffers(
                   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                   _grid_xy_data, _grid_xy_data_mem);
 
-    vkMapMemory(**_device, stagingBufferMemory, 0, size, 0, &data);
+    vkMapMemory(*_device, stagingBufferMemory, 0, size, 0, &data);
     memcpy(data, grid.data(), (size_t) size);
-    vkUnmapMemory(**_device, stagingBufferMemory);
+    vkUnmapMemory(*_device, stagingBufferMemory);
 
     copyBuffer(stagingBuffer, _grid_xy_data, size);
 
@@ -772,9 +812,9 @@ void VulkanRenderer::create_buffers(
                   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                   _index_data, _index_data_mem);
 
-    vkMapMemory(**_device, stagingBufferMemory, 0, size, 0, &data);
+    vkMapMemory(*_device, stagingBufferMemory, 0, size, 0, &data);
     memcpy(data, triangles.data(), (size_t) size);
-    vkUnmapMemory(**_device, stagingBufferMemory);
+    vkUnmapMemory(*_device, stagingBufferMemory);
 
     copyBuffer(stagingBuffer, _index_data, size);
 
@@ -785,19 +825,126 @@ void VulkanRenderer::update_frame_z_data(Frame& frame) {
     auto size = sizeof(float) * frame.z_data.size();
 
     void* data;
-    vkMapMemory(**_device, _staging_buffer_mem, 0, size, 0, &data);
+    vkMapMemory(*_device, _staging_buffer_mem, 0, size, 0, &data);
     memcpy(data, frame.z_data.data(), (size_t) size);
-    vkUnmapMemory(**_device, _staging_buffer_mem);
+    vkUnmapMemory(*_device, _staging_buffer_mem);
 
     copyBuffer(_staging_buffer, _frame_z_data, size);
 }
 
 void VulkanRenderer::update_scene() {
+    std::cout << "Started update scene" << std::endl;
     camera.update();
+
+    UniformBufferObject ubo{};
+
+    glm::mat4 model = glm::mat4(1.0f);
     glm::mat4 view = camera.getViewMatrix();
     glm::mat4 proj = glm::perspective(glm::radians(70.0f), (float)_swap_chain_extent.width / (float)_swap_chain_extent.height, 0.1f, 1000.0f);
+
+    proj[1][1] *= -1;
+
+    glm::mat4 mvp = proj * view * model;
+
+    ubo.mvp = mvp;
+
+    for (int i=0; i < 4; i++) {
+        for (int j=0; j < 4; j++){ 
+            std::cout << "| " << ubo.mvp[i][j];
+        }
+        std::cout << std::endl;
+    }
+
+    memcpy(uniformBufferMapped, &ubo, sizeof(ubo));
+
+    std::cout << "Ended update scene" << std::endl;
 }
 
 Camera& VulkanRenderer::get_camera() {
     return camera;
+}
+
+void VulkanRenderer::create_descriptor_set_layout() {
+#ifndef NDEBUG
+    std::cout << "Created Descriptor Set Layout" << std::endl;
+#endif
+
+    vk::DescriptorSetLayoutBinding uboLayoutBinding{
+        .binding = 0,
+        .descriptorType = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex
+    };
+
+    vk::DescriptorSetLayoutCreateInfo layoutInfo{
+        .bindingCount = 1,
+        .pBindings = &uboLayoutBinding
+    };
+
+    descriptorSetLayout = vk::raii::DescriptorSetLayout(_device, layoutInfo);
+}
+
+void VulkanRenderer::create_uniform_buffers() {
+    VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+
+    create_buffer(
+        bufferSize,
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        uniformBuffer,
+        uniformBufferMemory
+    );
+
+    vkMapMemory(
+        *_device,
+        uniformBufferMemory,
+        0,
+        bufferSize,
+        0,
+        &uniformBufferMapped
+    );
+}
+
+
+void VulkanRenderer::create_descriptor_pool() {
+    vk::DescriptorPoolSize poolSize{
+        .type = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = 1
+    };
+
+    vk::DescriptorPoolCreateInfo poolInfo{
+        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        .maxSets = 1,
+        .poolSizeCount = 1,
+        .pPoolSizes = &poolSize
+    };
+
+    descriptorPool = vk::raii::DescriptorPool(_device, poolInfo);
+}
+
+void VulkanRenderer::create_descriptor_sets() {
+    std::vector<vk::DescriptorSetLayout> layouts(1, *descriptorSetLayout);
+
+    vk::DescriptorSetAllocateInfo        allocInfo{
+        .descriptorPool     = descriptorPool,
+        .descriptorSetCount = static_cast<uint32_t>(layouts.size()),
+        .pSetLayouts        = layouts.data()
+    };
+
+    descriptorSets = _device.allocateDescriptorSets(allocInfo);
+    for (size_t i = 0; i < 1; i++)
+    {
+        vk::DescriptorBufferInfo bufferInfo{ .buffer = uniformBuffer, .offset = 0, .range = sizeof(UniformBufferObject) };
+        vk::WriteDescriptorSet   descriptorWrite{
+            .dstSet          = descriptorSets[i],
+            .dstBinding      = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType  = vk::DescriptorType::eUniformBuffer,
+            .pBufferInfo     = &bufferInfo
+        };
+        _device.updateDescriptorSets(descriptorWrite, {});
+    }
+
 }

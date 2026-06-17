@@ -9,6 +9,7 @@ void App::run() {
         Frame frame{loader.get_frame_z()};
 
         _renderer->update_frame_z_data(frame);
+        _renderer->update_scene();
         _renderer->draw();
     }
 }

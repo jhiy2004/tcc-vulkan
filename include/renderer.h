@@ -13,6 +13,7 @@ public:
                       ) = 0;
     virtual void draw() = 0;
     virtual void update_frame_z_data(Frame& frame) = 0;
+    virtual void update_scene() = 0;
     virtual Camera& get_camera() = 0;
 };
 

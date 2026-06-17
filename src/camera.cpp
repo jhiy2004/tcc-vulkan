@@ -1,31 +1,87 @@
 #include "camera.h"
 
-#include "glm/trigonometric.hpp"
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/trigonometric.hpp>
+#include <iostream>
 
-glm::mat4 Camera::getViewMatrix() {
-    glm::mat4 cameraTranslation = glm::translate(glm::mat4(1.f), pos);
-    glm::mat4 cameraRotation = getRotationMatrix();
-    return glm::inverse(cameraTranslation * cameraRotation);
+Camera::Camera()
+    : target(0.0f, 0.0f, 0.0f),
+      distance(200.0f),
+      yaw(0.0f),
+      pitch(-30.0f),
+      deltas(0.0f)
+{
 }
 
-glm::mat4 Camera::getRotationMatrix() {
-    glm::mat4 model = glm::rotate(glm::mat4(1), glm::radians(rot.x), glm::vec3(1.0f, 0.0f, 0.0f));
-    model = glm::rotate(model, glm::radians(rot.y), glm::vec3(0.0f, 1.0f, 0.0f));
-    model = glm::rotate(model, glm::radians(rot.z), glm::vec3(0.0f, 0.0f, 1.0f));
+glm::vec3 Camera::getPosition() const
+{
+    float pitchRad = glm::radians(pitch);
+    float yawRad   = glm::radians(yaw);
 
-    return model;
+    glm::vec3 position;
+
+    position.x =
+        target.x +
+        distance * cos(pitchRad) * sin(yawRad);
+
+    position.y =
+        target.y +
+        distance * sin(pitchRad);
+
+    position.z =
+        target.z +
+        distance * cos(pitchRad) * cos(yawRad);
+
+    return position;
 }
 
-void Camera::update() {
-    glm::mat4 rotation = getRotationMatrix();
-    pos += glm::vec3(rotation * glm::vec4(vel, 0.0f));
+glm::mat4 Camera::getViewMatrix()
+{
+    return glm::lookAt(
+        getPosition(),
+        target,
+        glm::vec3(0.0f, 1.0f, 0.0f)
+    );
 }
 
-void Camera::update_vel(glm::vec3 v) {
-    vel = v;
+void Camera::set_deltas(glm::vec3 d) {
+    deltas = d;
 }
 
-glm::vec3 Camera::get_vel() {
-    return vel;
+void Camera::update()
+{
+    rotate(deltas.x, deltas.y);
+    zoom(deltas.z);
+
+    glm::vec3 pos = getPosition();
+
+    std::cout << "Target: (" << target.x << "," << target.y << "," << target.z << ")" << std::endl;
+    std::cout << "Pos: (" << pos.x << "," << pos.y << "," << pos.z << ")" << std::endl;
+}
+
+void Camera::rotate(float deltaYaw, float deltaPitch)
+{
+    yaw += deltaYaw;
+    pitch += deltaPitch;
+
+    pitch = glm::clamp(
+        pitch,
+        -89.0f,
+        89.0f
+    );
+}
+
+void Camera::zoom(float deltaDistance)
+{
+    distance += deltaDistance;
+
+    if (distance < 1.0f)
+    {
+        distance = 1.0f;
+    }
+}
+
+void Camera::pan(glm::vec3 delta)
+{
+    target += delta;
 }

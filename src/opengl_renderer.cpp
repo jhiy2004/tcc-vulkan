@@ -17,3 +17,6 @@ void OpenGLRenderer::draw() {
 Camera& OpenGLRenderer::get_camera() {
     return camera;
 }
+
+
+void OpenGLRenderer::update_scene() {}

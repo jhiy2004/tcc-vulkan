@@ -15,6 +15,11 @@ import vulkan_hpp;
 #include "loader.h"
 #include "camera.h"
 
+struct UniformBufferObject
+{
+    glm::mat4 mvp;
+};
+
 class VulkanRenderer : public IRenderer {
 public:
     VulkanRenderer(){};
@@ -25,8 +30,9 @@ public:
               ) override;
     void draw() override;
     void update_frame_z_data(Frame& frame) override;
-    Camera& get_camera() override;
+    void update_scene() override;
 
+    Camera& get_camera() override;
 private:
     void create_instance();
     void setup_debug_messenger();
@@ -36,8 +42,7 @@ private:
     void create_surface();
     void create_swap_chain();
     void create_graphics_pipeline();
-
-    void update_scene();
+    void create_descriptor_set_layout();
 
     Camera camera;
 
@@ -87,6 +92,10 @@ private:
         const std::vector<Triangle>& triangles
     );
 
+    void create_uniform_buffers();
+    void create_descriptor_pool();
+    void create_descriptor_sets();
+
     // Changes every frame
     VkBuffer _frame_z_data;
     VkBuffer _staging_buffer;
@@ -112,8 +121,8 @@ private:
     std::unique_ptr<vk::raii::Context> _context = std::make_unique<vk::raii::Context>();
     std::unique_ptr<vk::raii::Instance> _instance = nullptr;
     std::unique_ptr<vk::raii::PhysicalDevice> _physical_device = nullptr;
-    std::unique_ptr<vk::raii::Device> _device = nullptr;
-    std::unique_ptr<vk::raii::DebugUtilsMessengerEXT> _debug_messenger = nullptr;
+    vk::raii::Device _device = nullptr;
+    vk::raii::DebugUtilsMessengerEXT _debug_messenger = nullptr;
     std::unique_ptr<vk::PhysicalDeviceFeatures> _device_features = nullptr;
     std::unique_ptr<vk::raii::Queue> _graphics_queue = nullptr;
     std::uint32_t _graphics_index = 0;
@@ -133,6 +142,15 @@ private:
     vk::Extent2D           _swap_chain_extent;
     std::vector<vk::raii::ImageView> _swap_chain_image_views;
 
+    vk::raii::DescriptorSetLayout descriptorSetLayout = nullptr;
+    vk::raii::PipelineLayout      pipelineLayout      = nullptr;
+    vk::raii::DescriptorPool descriptorPool = nullptr;
+    std::vector<vk::raii::DescriptorSet> descriptorSets;
+
+    VkBuffer                uniformBuffer;
+    VkDeviceMemory          uniformBufferMemory;
+    void                   *uniformBufferMapped;
+
     const std::vector<char const*> _validation_layers = {
         "VK_LAYER_KHRONOS_validation"
     };
@@ -140,6 +158,6 @@ private:
 #ifdef NDEBUG
     const bool enable_validation_layers = true;
 #else
-    const bool enable_validation_layers = false;
+    const bool enable_validation_layers = true;
 #endif
 };

@@ -5,18 +5,25 @@
 
 class Camera {
 public:
-    Camera() : pos(0), vel(0), rot(0) {}
-    Camera(glm::vec3 p, glm::vec3 v, glm::vec3 r) : pos(p), vel(v), rot(r) {}
+    Camera();
 
     glm::mat4 getViewMatrix();
-    glm::mat4 getRotationMatrix();
 
     void update();
-    void update_vel(glm::vec3 v);
 
-    glm::vec3 get_vel();
+    void rotate(float deltaYaw, float deltaPitch);
+    void zoom(float deltaDistance);
+    void pan(glm::vec3 delta);
+
+    glm::vec3 getPosition() const;
+
+    void set_deltas(glm::vec3 d);
+
 private:
-    glm::vec3 pos;
-    glm::vec3 vel;
-    glm::vec3 rot;
+    glm::vec3 target;
+
+    float distance;
+    float yaw;
+    float pitch;
+    glm::vec3 deltas;
 };
