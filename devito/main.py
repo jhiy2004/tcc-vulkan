@@ -333,7 +333,9 @@ if __name__ == "__main__":
         exit(1)
 
     try:
+        print(output_path / 'example.sim')
         generate_simulation_file(output_path / "example.sim", init_cond, 3.5, 8000, 500, 'float')
+        
         print("Generate simulation file")
     except ValueError:
         print("Shit")

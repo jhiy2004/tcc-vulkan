@@ -7,6 +7,7 @@
 #include <queue>
 #include <mutex>
 #include <condition_variable>
+#include <cstdint>
 
 struct Point {
     float x;
@@ -20,7 +21,16 @@ struct Triangle {
     uint32_t p3;
 };
 
-struct __attribute__((packed)) SimulationHeader {
+#if defined(__GNUC__) || defined(__clang__)
+    #define PACKED __attribute__((packed))
+#elif defined(_MSC_VER)
+    #define PACKED
+    #pragma pack(push, 1)
+#else
+    #define PACKED
+#endif
+
+struct PACKED SimulationHeader {
     char type;
     float x_extent;
     float y_extent;
@@ -28,6 +38,12 @@ struct __attribute__((packed)) SimulationHeader {
     uint32_t col;
     uint32_t qtd_frames;
 };
+
+#if defined(_MSC_VER)
+    #pragma pack(pop)
+#endif
+
+#undef PACKED
 
 struct Frame {
     std::vector<float> z_data;  

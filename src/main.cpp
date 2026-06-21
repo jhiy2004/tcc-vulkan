@@ -61,6 +61,8 @@ int main() {
     return 0;
     */
 
+    std::cout << "Started application" << std::endl;
+
     GLFWVulkanWindow vk_window(800, 600, "Vulkan App");
     //GLFWOpenGLWindow gl_window(800, 600, "OpenGL App");
     //OpenGLRenderer gl_renderer;

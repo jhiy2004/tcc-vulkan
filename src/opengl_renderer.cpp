@@ -1,5 +1,4 @@
 #include "opengl_renderer.h"
-#include <GL/gl.h>
 
 void OpenGLRenderer::init(IWindow *window, 
                           const std::vector<glm::vec2>& grid,
