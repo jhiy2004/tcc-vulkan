@@ -62,13 +62,8 @@ void Camera::update()
 void Camera::rotate(float deltaYaw, float deltaPitch)
 {
     yaw += deltaYaw;
-    pitch += deltaPitch;
 
-    pitch = glm::clamp(
-        pitch,
-        -89.0f,
-        89.0f
-    );
+    setPitch(pitch + deltaPitch);
 }
 
 void Camera::zoom(float deltaDistance)
@@ -84,4 +79,30 @@ void Camera::zoom(float deltaDistance)
 void Camera::pan(glm::vec3 delta)
 {
     target += delta;
+}
+
+float Camera::getYaw() const {
+    return yaw;
+}
+float Camera::getPitch() const {
+    return pitch;
+}
+
+float Camera::getDistance() const {
+    return distance;
+}
+
+void Camera::setYaw(float value) {
+    yaw = value;
+}
+void Camera::setPitch(float value) {
+    pitch = glm::clamp(
+        value,
+        -89.0f,
+        89.0f
+    );
+}
+
+void Camera::setDistance(float value) {
+    distance = value;
 }

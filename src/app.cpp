@@ -9,8 +9,8 @@ void App::run()
     auto last = clock::now();
 
     float playbackTime = 0.0f;
-    float frameDuration = 0.008f; // in seconds
-    uint32_t count{1};
+
+    info.set_frame_duration(0.008f);
 
     Frame currentFrame;
 
@@ -22,10 +22,9 @@ void App::run()
         float dt = std::chrono::duration<float>(
             now - last
         ).count();
+        info.set_last_dt(dt);
 
         last = now;
-
-        std::cout << "FPS: " << 1/dt << std::endl;
 
         // nunca atrasa a câmera
         _window->pollEvents();
@@ -33,6 +32,7 @@ void App::run()
         // controla apenas a simulação
         playbackTime += dt;
 
+        float frameDuration{info.get_frame_duration()};
         if (playbackTime >= frameDuration) {
             Frame next;
 
@@ -43,16 +43,14 @@ void App::run()
             }
 
             playbackTime -= frameDuration;
-            count++;
+            info.increment_frame_count();
         }
 
         _renderer->update_scene(
             currentFrame.zmin,
             currentFrame.zmax
         );
-        _renderer->draw();
-
-        std::cout << "Current Frame: " << count << std::endl;
+        _renderer->draw(info);
     }
 
     std::cout << "Closed application" << std::endl;

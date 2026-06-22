@@ -18,6 +18,8 @@
 #include "imgui_impl_vulkan.h"
 #include "imgui_impl_glfw.h"
 
+#include "app_info.h"
+
 constexpr static uint32_t MAX_FRAMES_IN_FLIGHT{2};
 
 // Deve ser um multiplo de 16 para manter o alinhamento
@@ -40,7 +42,7 @@ public:
               const std::vector<float>& bathymetryZ,
               const std::vector<Triangle>& triangles
               ) override;
-    void draw() override;
+    void draw(AppInfo& info) override;
     void update_frame_z_data(Frame& frame) override;
     void update_scene(float zmin, float zmax) override;
 
@@ -56,7 +58,7 @@ private:
     void create_graphics_pipeline();
     void create_descriptor_set_layout();
     void init_imgui();
-    void draw_imgui();
+    void draw_imgui(AppInfo& info);
     void cleanup_imgui();
 
     VkDescriptorPool _imgui_descriptor_pool{};
@@ -78,7 +80,7 @@ private:
     );
 
     VkShaderModule create_shader_module(const std::vector<char> &code) const;
-    void record_command_buffer(uint32_t imageIndex);
+    void record_command_buffer(uint32_t imageIndex, AppInfo& info);
     void create_command_pools();
     void create_command_buffers();
 

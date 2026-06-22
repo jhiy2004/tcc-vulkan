@@ -19,6 +19,13 @@ public:
 
     void set_deltas(glm::vec3 d);
 
+    float getYaw() const;
+    float getPitch() const;
+    float getDistance() const;
+
+    void setYaw(float value);
+    void setPitch(float value);
+    void setDistance(float value);
 private:
     glm::vec3 target;
 

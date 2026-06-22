@@ -6,6 +6,7 @@
 #include "window.h"
 #include <thread>
 #include <atomic>
+#include "app_info.h"
 
 #include <iostream>
 
@@ -26,7 +27,7 @@ public:
 
         _running = false;
         fb.set_finished();
-        
+
         if (_producer_thread.joinable()) {
             _producer_thread.join();
         }
@@ -45,4 +46,5 @@ private:
     FrameBuffer fb;
     IWindow *_window = nullptr;
     IRenderer *_renderer = nullptr;
+    AppInfo info;
 };

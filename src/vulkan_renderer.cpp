@@ -207,7 +207,7 @@ void VulkanRenderer::init(
     return;
 }
 
-void VulkanRenderer::draw() {
+void VulkanRenderer::draw(AppInfo& info) {
     std::cout << "Started draw" << std::endl;
 
     vkWaitForFences(_device, 1, &_draw_fences[_current_frame], VK_TRUE, UINT64_MAX);
@@ -220,7 +220,7 @@ void VulkanRenderer::draw() {
         recreate_swap_chain();
     }
 
-    record_command_buffer(imageIndex);
+    record_command_buffer(imageIndex, info);
 
     vkResetFences(_device, 1, &_draw_fences[_current_frame]);
 
@@ -910,7 +910,7 @@ VkShaderModule VulkanRenderer::create_shader_module(const std::vector<char> &cod
     return shaderModule;
 }
 
-void VulkanRenderer::record_command_buffer(uint32_t imageIndex) {
+void VulkanRenderer::record_command_buffer(uint32_t imageIndex, AppInfo& info) {
     std::cout << "Started record cmd buffer" << std::endl;
 
     VkCommandBufferBeginInfo beginInfo {
@@ -996,7 +996,7 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex) {
 
     vkCmdDrawIndexed(_command_buffers[_current_frame], _indices_size, 1, 0, 0, 0);
 
-    draw_imgui();
+    draw_imgui(info);
 
     // End rendering
     vkCmdEndRendering(_command_buffers[_current_frame]);
@@ -1519,16 +1519,37 @@ void VulkanRenderer::init_imgui() {
 #endif
 }
 
-void VulkanRenderer::draw_imgui() {
+void VulkanRenderer::draw_imgui(AppInfo& info) {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    ImGui::ShowDemoWindow();
+    ImGui::Begin("Shallow Water Equations - Vulkan Renderer");
+
+    ImGui::Text("Frame rate: %d FPS", info.get_fps());
+    ImGui::Text("Current simulation frame: %d", info.get_frame_count());
+
+    float yaw{camera.getYaw()};
+    float pitch{camera.getPitch()};
+    float distance{camera.getDistance()};
+    
+    // Change
+    float duration{info.get_frame_duration()};
+    ImGui::InputFloat("Minimum time on each simulation frame", &duration);
+    ImGui::InputFloat("Yaw", &yaw);
+    ImGui::InputFloat("Pitch", &pitch);
+    ImGui::InputFloat("Distance", &distance);
+
+    ImGui::End();
 
     ImGui::Render();
 
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), _command_buffers[_current_frame]);
+
+    info.set_frame_duration(duration);
+    camera.setYaw(yaw);
+    camera.setPitch(pitch);
+    camera.setDistance(distance);
 }
 
 void VulkanRenderer::cleanup_imgui() {
