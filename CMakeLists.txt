@@ -32,7 +32,6 @@ find_package(OpenGL REQUIRED)
 add_subdirectory(thirdparty/glfw-3.4)
 add_subdirectory(thirdparty/glm)
 add_subdirectory(thirdparty/stb_image)
-add_subdirectory(thirdparty/imgui-1.92.6)
 add_subdirectory(thirdparty/glad)
 
 
@@ -42,6 +41,7 @@ endif()
 
 add_subdirectory(thirdparty/volk-1.4.350)
 
+add_subdirectory(thirdparty/imgui-1.92.6)
 
 target_link_libraries(tcc
     PRIVATE

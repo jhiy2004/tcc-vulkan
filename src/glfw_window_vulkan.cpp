@@ -1,6 +1,5 @@
 #include "glfw_window_vulkan.h"
 #include "GLFW/glfw3.h"
-
 #include <iostream>
 
 void GLFWVulkanWindow::set_camera(Camera *camera) { _camera = camera; }

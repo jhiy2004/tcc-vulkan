@@ -65,6 +65,9 @@ void VulkanRenderer::init(
     create_uniform_buffers();
     create_descriptor_pool();
     create_descriptor_sets();
+
+    init_imgui();
+
     return;
 }
 
@@ -813,6 +816,7 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex) {
 
     // Set up the rendering info
     VkRenderingInfo renderingInfo = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
         .renderArea = { .offset = { 0, 0 }, .extent = _swap_chain_extent },
         .layerCount = 1,
         .colorAttachmentCount = 1,
@@ -853,6 +857,8 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex) {
     vkCmdBindVertexBuffers(_command_buffers[_current_frame], 1, 1, &_frame_z_data, &offsets[0]);
 
     vkCmdDrawIndexed(_command_buffers[_current_frame], _indices_size, 1, 0, 0, 0);
+
+    draw_imgui();
 
     // End rendering
     vkCmdEndRendering(_command_buffers[_current_frame]);
@@ -922,6 +928,7 @@ void VulkanRenderer::transition_image_layout(
     VkPipelineStageFlags2 dstStageMask
 ) {
     VkImageMemoryBarrier2 barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .srcStageMask = srcStageMask,
         .srcAccessMask = srcAccessMask,
         .dstStageMask = dstStageMask,
@@ -941,6 +948,7 @@ void VulkanRenderer::transition_image_layout(
     };
 
     VkDependencyInfo dependencyInfo = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
         .dependencyFlags = {},
         .imageMemoryBarrierCount = 1,
         .pImageMemoryBarriers = &barrier
@@ -1302,4 +1310,111 @@ void VulkanRenderer::create_descriptor_sets() {
 
         vkUpdateDescriptorSets(_device, 1, &descriptorWrite, 0, nullptr);
     }
+}
+
+void VulkanRenderer::init_imgui() {
+    // Create imgui descriptor pool
+    VkDescriptorPoolSize pool_sizes[] =
+    {
+        { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+    };
+
+    VkDescriptorPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    pool_info.maxSets = 0;
+    
+    for (VkDescriptorPoolSize& pool_size : pool_sizes) {
+        pool_info.maxSets += pool_size.descriptorCount;
+    }
+    
+    pool_info.poolSizeCount = (uint32_t)IM_COUNTOF(pool_sizes);
+    pool_info.pPoolSizes = pool_sizes;
+    if( vkCreateDescriptorPool(_device, &pool_info, nullptr, &_imgui_descriptor_pool) != VK_SUCCESS ) {
+        throw std::runtime_error("Failed to create imgui pool");
+    }
+
+    // ImGui initialization
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+
+    ImGui_ImplVulkan_InitInfo init_info = {};
+    init_info.ApiVersion = VK_API_VERSION_1_3;
+    init_info.Instance = _instance;
+    init_info.PhysicalDevice = _physical_device;
+    init_info.Device = _device;
+    init_info.QueueFamily = _graphics_index;
+    init_info.Queue = _graphics_queue;
+    init_info.PipelineCache = VK_NULL_HANDLE;
+    init_info.DescriptorPool = _imgui_descriptor_pool;
+    init_info.MinImageCount = static_cast<uint32_t>(_swap_chain_images.size());
+    init_info.ImageCount = static_cast<uint32_t>(_swap_chain_images.size());
+    init_info.Allocator = nullptr;
+    init_info.UseDynamicRendering = true;
+    init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkFormat format = _swap_chain_surface_format.format;
+    init_info.PipelineInfoMain.PipelineRenderingCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .pNext = nullptr,
+        .viewMask = 0,
+        .colorAttachmentCount = 1,
+        .pColorAttachmentFormats = &format,
+        .depthAttachmentFormat = VK_FORMAT_UNDEFINED,
+        .stencilAttachmentFormat = VK_FORMAT_UNDEFINED
+    };
+
+    if (_window) {
+        std::cout << "_window is valid" << std::endl;
+    }else {
+        std::cout << "_window is nullptr" << std::endl;
+    }
+    
+
+    bool glfw_ok = ImGui_ImplGlfw_InitForVulkan(_window, true);
+    if (!glfw_ok) {
+        throw std::runtime_error("Failed ImGui GLFW init");
+    }
+    
+    std::cout << "ImGui GLFW initialized" << std::endl;
+
+    bool vk_ok = ImGui_ImplVulkan_Init(&init_info);
+    if (!vk_ok) {
+        throw std::runtime_error("Failed ImGui Vulkan init");
+    }
+    
+    std::cout << "ImGui Vulkan initialized" << std::endl;
+
+#ifndef NDEBUG
+    std::cout << "Initialized imgui" << std::endl;
+#endif
+}
+
+void VulkanRenderer::draw_imgui() {
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    ImGui::ShowDemoWindow();
+
+    ImGui::Render();
+
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), _command_buffers[_current_frame]);
+}
+
+void VulkanRenderer::cleanup_imgui() {
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
 }
