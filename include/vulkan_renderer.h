@@ -7,9 +7,13 @@
 #include <GLFW/glfw3.h>
 
 #include <memory>
+#include <array>
+
 
 #include "loader.h"
 #include "camera.h"
+
+constexpr static uint32_t MAX_FRAMES_IN_FLIGHT{2};
 
 struct UniformBufferObject
 {
@@ -58,8 +62,8 @@ private:
 
     VkShaderModule create_shader_module(const std::vector<char> &code) const;
     void record_command_buffer(uint32_t imageIndex);
-    void create_command_pool();
-    void create_command_buffer();
+    void create_command_pools();
+    void create_command_buffers();
 
     void transition_image_layout(
         uint32_t imageIndex,
@@ -94,62 +98,64 @@ private:
     void create_descriptor_sets();
 
     // Changes every frame
-    VkBuffer _frame_z_data;
-    VkBuffer _staging_buffer;
+    VkBuffer _frame_z_data{};
+    VkBuffer _staging_buffer{};
 
     // Only changes one time per simulation
-    VkBuffer _bathymetry_z_data;
-    VkBuffer _grid_xy_data;
-    VkBuffer _index_data;
+    VkBuffer _bathymetry_z_data{};
+    VkBuffer _grid_xy_data{};
+    VkBuffer _index_data{};
 
-    VkDeviceMemory _staging_buffer_mem;
-    VkDeviceMemory _frame_z_data_mem;
-    VkDeviceMemory _bathymetry_z_data_mem;
-    VkDeviceMemory _grid_xy_data_mem;
-    VkDeviceMemory _index_data_mem;
+    VkDeviceMemory _staging_buffer_mem{};
+    VkDeviceMemory _frame_z_data_mem{};
+    VkDeviceMemory _bathymetry_z_data_mem{};
+    VkDeviceMemory _grid_xy_data_mem{};
+    VkDeviceMemory _index_data_mem{};
 
     // Indices information
-    uint32_t _indices_size;
+    uint32_t _indices_size{};
 
-    bool _framebuffer_resized = false;
+    bool _framebuffer_resized{false};
     std::vector<const char*> required_device_extension = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
-    GLFWwindow* _window;
-    VkInstance _instance;
-    VkPhysicalDevice _physical_device;
-    VkDevice _device;
-    VkDebugUtilsMessengerEXT _debug_messenger;
-    VkPhysicalDeviceFeatures _device_features;
-    VkQueue _graphics_queue;
+    GLFWwindow* _window{nullptr};
+    VkInstance _instance{};
+    VkPhysicalDevice _physical_device{};
+    VkDevice _device{};
+    VkDebugUtilsMessengerEXT _debug_messenger{};
+    VkPhysicalDeviceFeatures _device_features{};
+    VkQueue _graphics_queue{};
     std::uint32_t _graphics_index = 0;
-    VkSurfaceKHR _surface;
-    VkPipeline _graphics_pipeline = nullptr;
+    VkSurfaceKHR _surface{};
+    VkPipeline _graphics_pipeline{};
 
-    VkCommandPool    _command_pool      = nullptr;
-    VkCommandBuffer  _command_buffer    = nullptr;
+    std::array<VkCommandPool, MAX_FRAMES_IN_FLIGHT> _command_pools;
+    std::array<VkCommandBuffer, MAX_FRAMES_IN_FLIGHT> _command_buffers;
 
-    VkSemaphore _present_complete_semaphore = nullptr;
-    VkSemaphore _render_finished_semaphore = nullptr;
-    VkFence _draw_fence = nullptr;
+    std::array<VkSemaphore, MAX_FRAMES_IN_FLIGHT> _present_complete_semaphores;
+    std::array<VkSemaphore, MAX_FRAMES_IN_FLIGHT> _render_finished_semaphores;
+    std::array<VkFence, MAX_FRAMES_IN_FLIGHT> _draw_fences;
 
-    VkSwapchainKHR _swap_chain = nullptr;
-    std::vector<VkImage> _swap_chain_images;
-    VkSurfaceFormatKHR   _swap_chain_surface_format;
-    VkExtent2D           _swap_chain_extent;
-    std::vector<VkImageView> _swap_chain_image_views;
+    VkSwapchainKHR _swap_chain{};
+    std::vector<VkImage> _swap_chain_images{};
+    VkSurfaceFormatKHR   _swap_chain_surface_format{};
+    VkExtent2D           _swap_chain_extent{};
+    std::vector<VkImageView> _swap_chain_image_views{};
 
-    VkDescriptorSetLayout descriptorSetLayout = nullptr;
-    VkPipelineLayout pipelineLayout      = nullptr;
-    VkDescriptorPool descriptorPool = nullptr;
-    std::vector<VkDescriptorSet> descriptorSets;
+    VkDescriptorSetLayout descriptorSetLayout{};
+    VkPipelineLayout pipelineLayout{};
+    VkDescriptorPool descriptorPool{};
+    std::vector<VkDescriptorSet> descriptorSets{};
 
-    VkBuffer                uniformBuffer;
-    VkDeviceMemory          uniformBufferMemory;
-    void                   *uniformBufferMapped;
+    VkBuffer                uniformBuffer{};
+    VkDeviceMemory          uniformBufferMemory{};
+    void                   *uniformBufferMapped{nullptr};
 
     const std::vector<char const*> _validation_layers = {
         "VK_LAYER_KHRONOS_validation"
     };
+
+    uint32_t _current_frame{0};
 
 #ifdef NDEBUG
     const bool enable_validation_layers = false;

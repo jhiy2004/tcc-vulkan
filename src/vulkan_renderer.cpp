@@ -4,7 +4,6 @@
 #include "loader.h"
 #include "util.h"
 
-#include <array>
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
@@ -53,8 +52,8 @@ void VulkanRenderer::init(
     create_descriptor_set_layout();
 
     create_graphics_pipeline();
-    create_command_pool();
-    create_command_buffer();
+    create_command_pools();
+    create_command_buffers();
     create_sync_objects();
 
     create_buffers(
@@ -72,10 +71,10 @@ void VulkanRenderer::init(
 void VulkanRenderer::draw() {
     std::cout << "Started draw" << std::endl;
 
-    vkWaitForFences(_device, 1, &_draw_fence, VK_TRUE, UINT64_MAX);
+    vkWaitForFences(_device, 1, &_draw_fences[_current_frame], VK_TRUE, UINT64_MAX);
 
     uint32_t imageIndex{};
-    VkResult result = vkAcquireNextImageKHR(_device, _swap_chain, UINT64_MAX, _present_complete_semaphore, nullptr, &imageIndex);
+    VkResult result = vkAcquireNextImageKHR(_device, _swap_chain, UINT64_MAX, _present_complete_semaphores[_current_frame], nullptr, &imageIndex);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         _framebuffer_resized = false;
@@ -84,26 +83,26 @@ void VulkanRenderer::draw() {
 
     record_command_buffer(imageIndex);
 
-    vkResetFences(_device, 1, &_draw_fence);
+    vkResetFences(_device, 1, &_draw_fences[_current_frame]);
 
     VkPipelineStageFlags waitDestinationStageMask( VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT );
     VkSubmitInfo submitInfo{};
 
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.waitSemaphoreCount = 1,
-    submitInfo.pWaitSemaphores = &_present_complete_semaphore;
+    submitInfo.pWaitSemaphores = &_present_complete_semaphores[_current_frame];
     submitInfo.pWaitDstStageMask = &waitDestinationStageMask;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &_command_buffer;
+    submitInfo.pCommandBuffers = &_command_buffers[_current_frame];
     submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = &_render_finished_semaphore;
+    submitInfo.pSignalSemaphores = &_render_finished_semaphores[_current_frame];
 
-    vkQueueSubmit(_graphics_queue, 1, &submitInfo, _draw_fence);
+    vkQueueSubmit(_graphics_queue, 1, &submitInfo, _draw_fences[_current_frame]);
 
     VkPresentInfoKHR presentInfoKHR{};
     presentInfoKHR.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     presentInfoKHR.waitSemaphoreCount = 1;
-    presentInfoKHR.pWaitSemaphores = &_render_finished_semaphore;
+    presentInfoKHR.pWaitSemaphores = &_render_finished_semaphores[_current_frame];
     presentInfoKHR.swapchainCount = 1;
     presentInfoKHR.pSwapchains = &_swap_chain;
     presentInfoKHR.pImageIndices = &imageIndex;
@@ -119,6 +118,8 @@ void VulkanRenderer::draw() {
         default:
             break;
     }
+
+    _current_frame = (_current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 
     std::cout << "Ended draw" << std::endl;
 }
@@ -670,7 +671,7 @@ void VulkanRenderer::create_graphics_pipeline() {
     VkPipelineDynamicStateCreateInfo dynamicState{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
     };
-    dynamicState.dynamicStateCount = dynamicStates.size();
+    dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
     dynamicState.pDynamicStates = dynamicStates.data();
 
     VkPipelineViewportStateCreateInfo viewportState{
@@ -775,7 +776,7 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex) {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
     };
 
-    if (vkBeginCommandBuffer(_command_buffer, &beginInfo) != VK_SUCCESS) {
+    if (vkBeginCommandBuffer(_command_buffers[_current_frame], &beginInfo) != VK_SUCCESS) {
         throw std::runtime_error("Failed to begin command buffer");
     }
 
@@ -819,10 +820,10 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex) {
     };
 
     // Begin rendering
-    vkCmdBeginRendering(_command_buffer, &renderingInfo);
+    vkCmdBeginRendering(_command_buffers[_current_frame], &renderingInfo);
 
-    vkCmdBindPipeline(_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _graphics_pipeline);
-    vkCmdBindDescriptorSets(_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, static_cast<uint32_t>(descriptorSets.size()), descriptorSets.data(), 0, nullptr);
+    vkCmdBindPipeline(_command_buffers[_current_frame], VK_PIPELINE_BIND_POINT_GRAPHICS, _graphics_pipeline);
+    vkCmdBindDescriptorSets(_command_buffers[_current_frame], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, static_cast<uint32_t>(descriptorSets.size()), descriptorSets.data(), 0, nullptr);
 
     VkViewport viewport{
         0.0f,
@@ -837,24 +838,24 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex) {
         _swap_chain_extent
     };
 
-    vkCmdSetViewport(_command_buffer, 0, 1, &viewport);
-    vkCmdSetScissor(_command_buffer, 0, 1, &scissor);
+    vkCmdSetViewport(_command_buffers[_current_frame], 0, 1, &viewport);
+    vkCmdSetScissor(_command_buffers[_current_frame], 0, 1, &scissor);
 
     // Bind all buffers to their respective location, binding and offsets
     std::array<VkBuffer, 2> buffers = { _grid_xy_data, _bathymetry_z_data};
     VkDeviceSize offsets[] = {0, 0};
 
-    vkCmdBindVertexBuffers(_command_buffer, 0, buffers.size(), buffers.data(), offsets);
-    vkCmdBindIndexBuffer(_command_buffer, _index_data, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindVertexBuffers(_command_buffers[_current_frame], 0, static_cast<uint32_t>(buffers.size()), buffers.data(), offsets);
+    vkCmdBindIndexBuffer(_command_buffers[_current_frame], _index_data, 0, VK_INDEX_TYPE_UINT32);
 
-    vkCmdDrawIndexed(_command_buffer, _indices_size, 1, 0, 0, 0);
+    vkCmdDrawIndexed(_command_buffers[_current_frame], _indices_size, 1, 0, 0, 0);
 
-    vkCmdBindVertexBuffers(_command_buffer, 1, 1, &_frame_z_data, &offsets[0]);
+    vkCmdBindVertexBuffers(_command_buffers[_current_frame], 1, 1, &_frame_z_data, &offsets[0]);
 
-    vkCmdDrawIndexed(_command_buffer, _indices_size, 1, 0, 0, 0);
+    vkCmdDrawIndexed(_command_buffers[_current_frame], _indices_size, 1, 0, 0, 0);
 
     // End rendering
-    vkCmdEndRendering(_command_buffer);
+    vkCmdEndRendering(_command_buffers[_current_frame]);
 
     // Transition the image layout for presentation
     transition_image_layout(
@@ -867,39 +868,47 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex) {
         VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT
     );
 
-    vkEndCommandBuffer(_command_buffer);
+    vkEndCommandBuffer(_command_buffers[_current_frame]);
 
     std::cout << "Ended record cmd buffer" << std::endl;
 }
 
-void VulkanRenderer::create_command_pool() {
+void VulkanRenderer::create_command_pools() {
     VkCommandPoolCreateInfo poolInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = _graphics_index
     };
 
-    if (vkCreateCommandPool(_device, &poolInfo, nullptr, &_command_pool) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create command pool");
+    for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        if (vkCreateCommandPool(_device, &poolInfo, nullptr, &_command_pools[i]) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create command pool " + i);
+        }
     }
+
+
 #ifndef NDEBUG
-    std::cout << "Created command pool" << std::endl;
+    std::cout << "Created command pools" << std::endl;
 #endif
 }
 
-void VulkanRenderer::create_command_buffer() {
-    VkCommandBufferAllocateInfo allocInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = _command_pool,
-        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1
-    };
+void VulkanRenderer::create_command_buffers() {
+    for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        VkCommandBufferAllocateInfo allocInfo{
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .commandPool = _command_pools[i],
+            .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount = 1
+        };
 
-    if (vkAllocateCommandBuffers(_device, &allocInfo, &_command_buffer) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to allocate command buffer");
+        if (vkAllocateCommandBuffers(_device, &allocInfo, &_command_buffers[i]) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to allocate command buffer");
+        }
     }
+
+
 #ifndef NDEBUG
-    std::cout << "Allocated command buffer" << std::endl;
+    std::cout << "Allocated command buffers" << std::endl;
 #endif
 }
 
@@ -937,7 +946,7 @@ void VulkanRenderer::transition_image_layout(
         .pImageMemoryBarriers = &barrier
     };
 
-    vkCmdPipelineBarrier2(_command_buffer, &dependencyInfo);
+    vkCmdPipelineBarrier2(_command_buffers[_current_frame], &dependencyInfo);
 }
 
 void VulkanRenderer::create_sync_objects() {
@@ -945,12 +954,14 @@ void VulkanRenderer::create_sync_objects() {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
     };
 
-    if (vkCreateSemaphore(_device, &semInfo, nullptr, &_present_complete_semaphore) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create present complete semaphore");
-    }
+    for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        if (vkCreateSemaphore(_device, &semInfo, nullptr, &_present_complete_semaphores[i]) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create present complete semaphore " + i);
+        }
 
-    if (vkCreateSemaphore(_device, &semInfo, nullptr, &_render_finished_semaphore) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create render finished semaphore");
+        if (vkCreateSemaphore(_device, &semInfo, nullptr, &_render_finished_semaphores[i]) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create render finished semaphore " + i);
+        }
     }
 
     VkFenceCreateInfo fenInfo{
@@ -958,9 +969,12 @@ void VulkanRenderer::create_sync_objects() {
         .flags = VK_FENCE_CREATE_SIGNALED_BIT,
     };
 
-    if (vkCreateFence(_device, &fenInfo, nullptr, &_draw_fence) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create draw fence");
+    for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        if (vkCreateFence(_device, &fenInfo, nullptr, &_draw_fences[i]) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create draw fence " + i);
+        }
     }
+
 #ifndef NDEBUG
     std::cout << "Created sync objects" << std::endl;
 #endif
@@ -1002,7 +1016,7 @@ void VulkanRenderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDevice
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandPool = _command_pool;
+    allocInfo.commandPool = _command_pools[_current_frame];
     allocInfo.commandBufferCount = 1;
 
     VkCommandBuffer commandBuffer;
@@ -1030,7 +1044,7 @@ void VulkanRenderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDevice
     vkQueueSubmit(_graphics_queue, 1, &submitInfo, VK_NULL_HANDLE);
     vkQueueWaitIdle(_graphics_queue);
 
-    vkFreeCommandBuffers(_device, _command_pool, 1, &commandBuffer);
+    vkFreeCommandBuffers(_device, _command_pools[_current_frame], 1, &commandBuffer);
 }
 
 // Helper function to create a buffer with allocated memory
