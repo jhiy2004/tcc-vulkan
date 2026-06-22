@@ -21,6 +21,8 @@ int main() {
     App app(&vk_window, &vk_renderer, std::filesystem::path(FILES_DIR) / "example.sim");
 
     app.run();
-    
+
+    std::cout << "Exited app.run()" << std::endl;
+
     return 0;
 }

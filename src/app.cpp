@@ -9,15 +9,14 @@ void App::run()
     auto last = clock::now();
 
     float playbackTime = 0.0f;
-    float frameDuration = 0.033f; // in seconds
+    float frameDuration = 0.008f; // in seconds
     uint32_t count{1};
 
     Frame currentFrame;
 
     fb.pop(currentFrame);
 
-    while (!_window->shouldClose())
-    {
+    while (!_window->shouldClose()) {
         auto now = clock::now();
 
         float dt = std::chrono::duration<float>(
@@ -55,6 +54,8 @@ void App::run()
 
         std::cout << "Current Frame: " << count << std::endl;
     }
+
+    std::cout << "Closed application" << std::endl;
 }
 
 void App::init_window() {
@@ -80,17 +81,15 @@ void App::init_renderer() {
 
 void App::frame_producer() {
     Frame frame;
-    while (true) {
+
+    while (_running) {
         bool res = loader.load_frame();
+
         if (!res) {
             break;
         }
 
-        frame.z_data = loader.get_frame_z();
-        frame.zmin = loader.get_zmin();
-        frame.zmax = loader.get_zmax();
         fb.push(std::move(frame));
     }
-
     fb.set_finished();
 }

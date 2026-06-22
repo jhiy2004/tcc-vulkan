@@ -3,6 +3,7 @@
 #include <GLFW/glfw3.h>
 
 #include "window.h"
+#include <iostream>
 
 #include <string_view>
 #include <string>
@@ -24,6 +25,8 @@ public:
     void camera_input_handler(int key, int action);
 
     ~GLFWVulkanWindow() {
+        std::cout << "Destroy glfw vulkan window" << std::endl;
+        
         glfwDestroyWindow(_window);
         glfwTerminate();
     }

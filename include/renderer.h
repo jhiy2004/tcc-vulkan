@@ -6,6 +6,8 @@
 
 class IRenderer {
 public:
+    virtual ~IRenderer() = default;
+
     virtual void init(IWindow* window, 
                       const std::vector<glm::vec2>& grid,
                       const std::vector<float>& bathymetryZ,

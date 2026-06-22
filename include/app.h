@@ -5,6 +5,9 @@
 #include "renderer.h"
 #include "window.h"
 #include <thread>
+#include <atomic>
+
+#include <iostream>
 
 class App {
 public:
@@ -17,8 +20,13 @@ public:
 
        _producer_thread = std::thread(&App::frame_producer, this);
     }
-    
+
     ~App() {
+        std::cout << "App Destructor start\n";
+
+        _running = false;
+        fb.set_finished();
+        
         if (_producer_thread.joinable()) {
             _producer_thread.join();
         }
@@ -31,6 +39,7 @@ private:
     void init_loader();
     void frame_producer();
 
+    std::atomic<bool> _running = true;
     std::thread _producer_thread;
     Loader loader;
     FrameBuffer fb;

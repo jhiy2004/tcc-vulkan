@@ -33,6 +33,8 @@ struct UniformBufferObject
 class VulkanRenderer : public IRenderer {
 public:
     VulkanRenderer(){};
+    ~VulkanRenderer();
+
     void init(IWindow* window,
               const std::vector<glm::vec2>& grid,
               const std::vector<float>& bathymetryZ,
@@ -101,6 +103,7 @@ private:
         VkDeviceMemory& bufferMemory
     );
     void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+    void upload_buffer(VkBuffer dst, VkDeviceSize size, const void* data);
 
     void create_buffers(
         const std::vector<glm::vec2>& grid,

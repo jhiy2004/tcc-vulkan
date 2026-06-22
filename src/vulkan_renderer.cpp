@@ -11,6 +11,142 @@
 #include <cstring>
 #include <algorithm>
 
+VulkanRenderer::~VulkanRenderer() {
+    std::cout << "VulkanRenderer Destructor called" << std::endl;
+
+    if (_device != VK_NULL_HANDLE) {
+        vkDeviceWaitIdle(_device);
+    }
+
+    cleanup_imgui();
+
+
+    // Descriptor pools
+    if (_imgui_descriptor_pool != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(_device, _imgui_descriptor_pool, nullptr);
+    }
+
+    if (descriptorPool != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(_device, descriptorPool, nullptr);
+    }
+
+
+    // Pipeline
+    if (_graphics_pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(_device, _graphics_pipeline, nullptr);
+    }
+    vkDestroyPipelineLayout(_device, pipelineLayout, nullptr);
+
+
+    if (descriptorSetLayout != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(
+            _device,
+            descriptorSetLayout,
+            nullptr
+        );
+    }
+
+
+    // Buffers + memory
+    vkDestroyBuffer(_device, _frame_z_data, nullptr);
+    vkFreeMemory(_device, _frame_z_data_mem, nullptr);
+
+    vkDestroyBuffer(_device, _staging_buffer, nullptr);
+    vkFreeMemory(_device, _staging_buffer_mem, nullptr);
+
+    vkDestroyBuffer(_device, _bathymetry_z_data, nullptr);
+    vkFreeMemory(_device, _bathymetry_z_data_mem, nullptr);
+
+    vkDestroyBuffer(_device, _grid_xy_data, nullptr);
+    vkFreeMemory(_device, _grid_xy_data_mem, nullptr);
+
+    vkDestroyBuffer(_device, _index_data, nullptr);
+    vkFreeMemory(_device, _index_data_mem, nullptr);
+
+    vkDestroyBuffer(_device, uniformBuffer, nullptr);
+    vkFreeMemory(_device, uniformBufferMemory, nullptr);
+
+    // Synchronization objects
+    for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+
+        if (_draw_fences[i] != VK_NULL_HANDLE) {
+            vkDestroyFence(
+                _device,
+                _draw_fences[i],
+                nullptr
+            );
+        }
+
+        if (_present_complete_semaphores[i] != VK_NULL_HANDLE) {
+            vkDestroySemaphore(
+                _device,
+                _present_complete_semaphores[i],
+                nullptr
+            );
+        }
+
+        if (_render_finished_semaphores[i] != VK_NULL_HANDLE) {
+            vkDestroySemaphore(
+                _device,
+                _render_finished_semaphores[i],
+                nullptr
+            );
+        }
+    }
+
+
+    // Command pools
+    for (std::size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+
+        if (_command_pools[i] != VK_NULL_HANDLE) {
+            vkDestroyCommandPool(
+                _device,
+                _command_pools[i],
+                nullptr
+            );
+        }
+    }
+
+
+    // Swapchain image views
+    for (auto view : _swap_chain_image_views) {
+        if (view != VK_NULL_HANDLE) {
+            vkDestroyImageView(
+                _device,
+                view,
+                nullptr
+            );
+        }
+    }
+
+    if (_swap_chain != VK_NULL_HANDLE) {
+        vkDestroySwapchainKHR(
+            _device,
+            _swap_chain,
+            nullptr
+        );
+    }
+
+
+    vkDestroySurfaceKHR(_instance, _surface, nullptr);
+
+    if (_device != VK_NULL_HANDLE) {
+        vkDestroyDevice(
+            _device,
+            nullptr
+        );
+    }
+
+    vkDestroyDebugUtilsMessengerEXT(_instance, _debug_messenger, nullptr);
+
+    if (_instance != VK_NULL_HANDLE) {
+        vkDestroyInstance(
+            _instance,
+            nullptr
+        );
+    }
+}
+
 VkBool32 VulkanRenderer::debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     VkDebugUtilsMessageTypeFlagsEXT type,
@@ -751,6 +887,8 @@ void VulkanRenderer::create_graphics_pipeline() {
     if (vkCreateGraphicsPipelines(_device, nullptr, 1, &graphicsPipelineCreateInfo, nullptr, &_graphics_pipeline) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create graphics pipeline");
     } 
+
+    vkDestroyShaderModule(_device, shaderModule, nullptr);
 #ifndef NDEBUG
     std::cout << "Created graphics pipeline" << std::endl;
 #endif
@@ -1105,63 +1243,43 @@ void VulkanRenderer::create_buffers(
                   _staging_buffer, _staging_buffer_mem);
 
     // VkBuffer _bathymetry_z_data creation
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-    create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                  | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                  stagingBuffer, stagingBufferMemory);
-
     create_buffer(size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                   _bathymetry_z_data, _bathymetry_z_data_mem);
 
-    void* data;
-    vkMapMemory(_device, stagingBufferMemory, 0, size, 0, &data);
-    memcpy(data, bathymetryZ.data(), (size_t) size);
-    vkUnmapMemory(_device, stagingBufferMemory);
-
-    copyBuffer(stagingBuffer, _bathymetry_z_data, size);
+    upload_buffer(
+        _bathymetry_z_data,
+        sizeof(float)*bathymetryZ.size(),
+        bathymetryZ.data()
+    );
 
     // VkBuffer _grid_xy_data creation
     size = sizeof(glm::vec2) * grid.size();
-
-    create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                  | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                  stagingBuffer, stagingBufferMemory);
-
     create_buffer(size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                   _grid_xy_data, _grid_xy_data_mem);
-
-    vkMapMemory(_device, stagingBufferMemory, 0, size, 0, &data);
-    memcpy(data, grid.data(), (size_t) size);
-    vkUnmapMemory(_device, stagingBufferMemory);
-
-    copyBuffer(stagingBuffer, _grid_xy_data, size);
+    upload_buffer(
+        _grid_xy_data,
+        sizeof(glm::vec2)*grid.size(),
+        grid.data()
+    );
 
     // VkBuffer _index_data creation
     size = sizeof(Triangle) * triangles.size();
     _indices_size = size / sizeof(uint32_t);
-
-    create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                  | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                  stagingBuffer, stagingBufferMemory);
 
     create_buffer(size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT
                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                   _index_data, _index_data_mem);
 
-    vkMapMemory(_device, stagingBufferMemory, 0, size, 0, &data);
-    memcpy(data, triangles.data(), (size_t) size);
-    vkUnmapMemory(_device, stagingBufferMemory);
-
-    copyBuffer(stagingBuffer, _index_data, size);
+    upload_buffer(
+        _index_data,
+        sizeof(Triangle)*triangles.size(),
+        triangles.data()
+    );
 
     return;
 }
@@ -1417,4 +1535,62 @@ void VulkanRenderer::cleanup_imgui() {
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
+}
+
+void VulkanRenderer::upload_buffer(
+    VkBuffer dst,
+    VkDeviceSize size,
+    const void* data
+)
+{
+    VkBuffer staging;
+    VkDeviceMemory stagingMemory;
+
+    create_buffer(
+        size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        staging,
+        stagingMemory
+    );
+
+
+    void* mapped;
+
+    vkMapMemory(
+        _device,
+        stagingMemory,
+        0,
+        size,
+        0,
+        &mapped
+    );
+
+    memcpy(mapped, data, size);
+
+    vkUnmapMemory(
+        _device,
+        stagingMemory
+    );
+
+
+    copyBuffer(
+        staging,
+        dst,
+        size
+    );
+
+
+    vkDestroyBuffer(
+        _device,
+        staging,
+        nullptr
+    );
+
+    vkFreeMemory(
+        _device,
+        stagingMemory,
+        nullptr
+    );
 }
