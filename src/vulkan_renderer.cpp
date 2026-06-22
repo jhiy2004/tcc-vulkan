@@ -1169,11 +1169,15 @@ void VulkanRenderer::update_frame_z_data(Frame& frame) {
     copyBuffer(_staging_buffer, _frame_z_data, size);
 }
 
-void VulkanRenderer::update_scene() {
+void VulkanRenderer::update_scene(float zmin, float zmax) {
     std::cout << "Started update scene" << std::endl;
     camera.update();
 
-    UniformBufferObject ubo{};
+    UniformBufferObject ubo{
+        .zMin = zmin,
+        .zMax = zmax,
+        .colorByHeight = 1,
+    };
 
     glm::mat4 model = glm::mat4(1.0f);
     glm::mat4 view = camera.getViewMatrix();

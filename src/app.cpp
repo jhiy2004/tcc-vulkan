@@ -2,15 +2,58 @@
 
 #include <iostream>
 
-void App::run() {
-    while(!_window->shouldClose()) {
+void App::run()
+{
+    using clock = std::chrono::high_resolution_clock;
+
+    auto last = clock::now();
+
+    float playbackTime = 0.0f;
+    float frameDuration = 0.033f; // in seconds
+    uint32_t count{1};
+
+    Frame currentFrame;
+
+    fb.pop(currentFrame);
+
+    while (!_window->shouldClose())
+    {
+        auto now = clock::now();
+
+        float dt = std::chrono::duration<float>(
+            now - last
+        ).count();
+
+        last = now;
+
+        std::cout << "FPS: " << 1/dt << std::endl;
+
+        // nunca atrasa a câmera
         _window->pollEvents();
 
-        Frame frame{loader.get_frame_z()};
+        // controla apenas a simulação
+        playbackTime += dt;
 
-        _renderer->update_frame_z_data(frame);
-        _renderer->update_scene();
+        if (playbackTime >= frameDuration) {
+            Frame next;
+
+            if (fb.pop(next)) {
+                currentFrame = std::move(next);
+
+                _renderer->update_frame_z_data(currentFrame);
+            }
+
+            playbackTime -= frameDuration;
+            count++;
+        }
+
+        _renderer->update_scene(
+            currentFrame.zmin,
+            currentFrame.zmax
+        );
         _renderer->draw();
+
+        std::cout << "Current Frame: " << count << std::endl;
     }
 }
 
@@ -33,4 +76,21 @@ void App::init_renderer() {
 
     _renderer->init(_window, loader.get_grid_xy(), loader.get_bathymetry_z(), loader.get_triangles());
     std::cout << "_renderer inicializado com sucesso\n";
+}
+
+void App::frame_producer() {
+    Frame frame;
+    while (true) {
+        bool res = loader.load_frame();
+        if (!res) {
+            break;
+        }
+
+        frame.z_data = loader.get_frame_z();
+        frame.zmin = loader.get_zmin();
+        frame.zmax = loader.get_zmax();
+        fb.push(std::move(frame));
+    }
+
+    fb.set_finished();
 }

@@ -13,7 +13,7 @@ public:
               ) override;
     void draw() override;
 
-    void update_scene() override;
+    void update_scene(float zmin, float zmax) override;
     Camera& get_camera() override;
 private:
     Camera camera;

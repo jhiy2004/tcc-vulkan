@@ -1,8 +1,11 @@
 #include "loader.h"
 
+#include <limits>
 #include <iostream>
 
-Loader::Loader(const std::filesystem::path& filename) : file(filename, std::ios::binary)
+Loader::Loader(const std::filesystem::path& filename) : file(filename, std::ios::binary),
+                                                        zmin{std::numeric_limits<float>::max()},
+                                                        zmax{std::numeric_limits<float>::lowest()}
 {
     if (file.is_open()) {
         SimulationHeader header;
@@ -28,8 +31,8 @@ Loader::Loader(const std::filesystem::path& filename) : file(filename, std::ios:
 
         float dx = static_cast<float>(header.x_extent) / (col - 1);
         float dy = static_cast<float>(header.y_extent) / (row - 1);
-        for (int i=0; i < row; i++) {
-            for (int j=0; j < col; j++) {
+        for (uint32_t i=0; i < row; i++) {
+            for (uint32_t j=0; j < col; j++) {
                 uint32_t pos = i*col + j;
                 grid_xy[pos].x = j * dx;
                 grid_xy[pos].y = i * dy;
@@ -55,8 +58,8 @@ Loader::Loader(const std::filesystem::path& filename) : file(filename, std::ios:
             row * col * sizeof(float)
         );
 
-        for (int i=0; i < row; i++) {
-            for (int j=0; j < col; j++) {
+        for (uint32_t i=0; i < row; i++) {
+            for (uint32_t j=0; j < col; j++) {
                 uint32_t pos = i*col + j;
                 bathymetry_z[pos] = z_values[pos];
             }
@@ -73,6 +76,9 @@ bool Loader::load_frame() {
         return false;
     }
 
+    zmin = std::numeric_limits<float>::max();
+    zmax = std::numeric_limits<float>::lowest();
+
     if (file.is_open()) {
         std::vector<float> z_values(row * col);
         file.read(
@@ -80,10 +86,21 @@ bool Loader::load_frame() {
             row * col * sizeof(float)
         );
 
-        for (int i=0; i < row; i++) {
-            for (int j=0; j < col; j++) {
+        for (uint32_t i=0; i < row; i++) {
+            for (uint32_t j=0; j < col; j++) {
                 uint32_t pos = i*col + j;
-                frame_z[pos] = z_values[pos];
+
+                float value{z_values[pos]};
+                
+                if (value > zmax) {
+                    zmax = value;
+                }
+
+                if (value < zmin) {
+                    zmin = value;
+                }
+                
+                frame_z[pos] = value;
             }
         }
         current_frame++;
@@ -93,24 +110,24 @@ bool Loader::load_frame() {
     return false;
 }
 
-std::vector<Triangle> Loader::get_triangles() const {
+const std::vector<Triangle>& Loader::get_triangles() const {
     return triangles;
 }
 
-std::vector<glm::vec2> Loader::get_grid_xy() const {
+const std::vector<glm::vec2>& Loader::get_grid_xy() const {
     return grid_xy;
 }
 
-std::vector<float> Loader::get_frame_z() const {
+const std::vector<float>& Loader::get_frame_z() const {
     return frame_z;
 }
 
-std::vector<float> Loader::get_bathymetry_z() const {
+const std::vector<float>& Loader::get_bathymetry_z() const {
     return bathymetry_z;
 }
 
 std::uint32_t Loader::get_qtd_points() const {
-    return grid_xy.size();
+    return static_cast<uint32_t>(grid_xy.size());
 }
 
 FrameBuffer::FrameBuffer(size_t c) : capacity(c) {}
@@ -158,4 +175,13 @@ void FrameBuffer::set_finished() {
 
     cv_not_empty.notify_all();
     cv_not_full.notify_all();
+}
+
+
+float Loader::get_zmin() const {
+    return zmin;
+}
+
+float Loader::get_zmax() const {
+    return zmax;
 }

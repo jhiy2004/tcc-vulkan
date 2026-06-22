@@ -18,4 +18,4 @@ Camera& OpenGLRenderer::get_camera() {
 }
 
 
-void OpenGLRenderer::update_scene() {}
+void OpenGLRenderer::update_scene(float zmin, float zmax) {}

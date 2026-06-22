@@ -2,6 +2,10 @@
 cbuffer UniformBuffer : register(b0)
 {
     float4x4 mvp;
+    float zMin;
+    float zMax;
+
+    uint16_t colorByHeight;
 };
 
 struct VertexInput
@@ -12,15 +16,8 @@ struct VertexInput
 
 struct VertexOutput
 {
-    float3 color : COLOR0;
+    float z : TEXCOORD0;
     float4 position : SV_Position;
-};
-
-static float3 colors[3] =
-{
-    float3(1.0, 0.0, 0.0),
-    float3(0.0, 1.0, 0.0),
-    float3(0.0, 0.0, 1.0)
 };
 
 [shader("vertex")]
@@ -38,7 +35,7 @@ VertexOutput vertMain(VertexInput input,
 
     output.position = mul(mvp, output.position);
 
-    output.color = colors[vid % 3];
+    output.z = input.z;
 
     return output;
 }
@@ -46,5 +43,18 @@ VertexOutput vertMain(VertexInput input,
 [shader("fragment")]
 float4 fragMain(VertexOutput input) : SV_Target
 {
-    return float4(input.color, 1.0);
+    if (colorByHeight == 0) {
+        return float4(1.0, 1.0, 1.0, 1.0);
+    }
+
+    float t = (input.z - zMin) / (zMax - zMin);
+
+    t = saturate(t);
+
+    float3 blue = float3(0.0, 0.0, 1.0);
+    float3 red  = float3(1.0, 0.0, 0.0);
+
+    float3 color = lerp(blue, red, t);
+
+    return float4(color, 1.0);
 }

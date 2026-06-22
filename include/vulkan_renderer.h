@@ -8,6 +8,7 @@
 
 #include <memory>
 #include <array>
+#include <cstdint>
 
 
 #include "loader.h"
@@ -15,9 +16,14 @@
 
 constexpr static uint32_t MAX_FRAMES_IN_FLIGHT{2};
 
+// Deve ser um multiplo de 16 para manter o alinhamento
 struct UniformBufferObject
 {
     glm::mat4 mvp;
+    float zMin;
+    float zMax;
+
+    uint16_t colorByHeight;
 };
 
 class VulkanRenderer : public IRenderer {
@@ -30,7 +36,7 @@ public:
               ) override;
     void draw() override;
     void update_frame_z_data(Frame& frame) override;
-    void update_scene() override;
+    void update_scene(float zmin, float zmax) override;
 
     Camera& get_camera() override;
 private:

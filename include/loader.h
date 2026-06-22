@@ -46,7 +46,9 @@ struct PACKED SimulationHeader {
 #undef PACKED
 
 struct Frame {
-    std::vector<float> z_data;  
+    std::vector<float> z_data;
+    float zmin;
+    float zmax;
 };
 
 class FrameBuffer {
@@ -73,11 +75,13 @@ public:
 
     bool load_frame();
 
+    float get_zmin() const;
+    float get_zmax() const;
     std::uint32_t get_qtd_points() const;
-    std::vector<Triangle> get_triangles() const;
-    std::vector<glm::vec2> get_grid_xy() const;
-    std::vector<float> get_frame_z() const;
-    std::vector<float> get_bathymetry_z() const;
+    const std::vector<Triangle>& get_triangles() const;
+    const std::vector<glm::vec2>& get_grid_xy() const;
+    const std::vector<float>& get_frame_z() const;
+    const std::vector<float>& get_bathymetry_z() const;
 private:
     std::ifstream file;
     int current_frame{};
@@ -89,4 +93,7 @@ private:
     std::vector<glm::vec2> grid_xy;
     std::vector<float> bathymetry_z;
     std::vector<float> frame_z;
+
+    float zmin{};
+    float zmax{};
 };
