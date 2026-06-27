@@ -5,6 +5,7 @@
 #include "renderer.h"
 
 #include "app_info.h"
+#include "simulation_metadata.h"
 
 class OpenGLRenderer : public IRenderer {
 public:
@@ -19,7 +20,9 @@ public:
 
     void update_scene(float zmin, float zmax, float dt) override;
     Camera& get_camera() override;
+    void set_metadata(const SimulationMetadata& metadata) override;
 private:
     Camera camera;
+    SimulationMetadata _metadata;
 };
 

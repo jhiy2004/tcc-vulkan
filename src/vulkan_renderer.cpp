@@ -1060,14 +1060,22 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex, AppInfo& info) {
     vkCmdBindVertexBuffers(_command_buffers[_current_frame], 0, static_cast<uint32_t>(buffers.size()), buffers.data(), offsets);
     vkCmdBindIndexBuffer(_command_buffers[_current_frame], _index_data, 0, VK_INDEX_TYPE_UINT32);
 
-    _frame_data.renderMode = 0;
+    float temp_max{_frame_data.zMax};
+    float temp_min{_frame_data.zMin};
+
+    _frame_data.zMax = _metadata.bathymetryZMax;
+    _frame_data.zMin = _metadata.bathymetryZMin;
+    _frame_data.renderMode = 2;
+
     vkCmdPushConstants(_command_buffers[_current_frame], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SurfacePushConstants), &_frame_data);
     vkCmdDrawIndexed(_command_buffers[_current_frame], _indices_size, 1, 0, 0, 0);
 
 
     vkCmdBindVertexBuffers(_command_buffers[_current_frame], 1, 1, &_frame_z_data, &offsets[0]);
     
-    _frame_data.renderMode = 1;
+    _frame_data.zMax = temp_max;
+    _frame_data.zMin = temp_min;
+    _frame_data.renderMode = 2;
     vkCmdPushConstants(_command_buffers[_current_frame], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SurfacePushConstants), &_frame_data);
     vkCmdDrawIndexed(_command_buffers[_current_frame], _indices_size, 1, 0, 0, 0);
 
@@ -1600,8 +1608,26 @@ void VulkanRenderer::draw_imgui(AppInfo& info) {
 
     ImGui::Begin("Shallow Water Equations - Vulkan Renderer");
 
+    int qtd_frames{info.get_qtd_frames()};
+    int count{info.get_frame_count()};
+    float ratio{static_cast<float>(count) / static_cast<float>(qtd_frames)};
+
+    ImGui::Text("Simulation data");
+    ImGui::Text("Rows: %d", _metadata.rows);
+    ImGui::Text("Cols: %d", _metadata.cols);
+    ImGui::Text("Bathymetry Z Min: %f", _metadata.bathymetryZMin);
+    ImGui::Text("Bathymetry Z Max: %f", _metadata.bathymetryZMax);
+    ImGui::Text("X Extent: %f", _metadata.xExtent);
+    ImGui::Text("Y Extent: %f", _metadata.yExtent);
+
+    ImGui::Separator();
+
     ImGui::Text("Frame rate: %d FPS", info.get_fps());
+    ImGui::Text("Amount of simulation frames: %d", info.get_qtd_frames());
     ImGui::Text("Current simulation frame: %d", info.get_frame_count());
+    ImGui::Text("Simulation Progress");
+    ImGui::ProgressBar(ratio);
+
 
     float yaw{camera.getYaw()};
     float pitch{camera.getPitch()};

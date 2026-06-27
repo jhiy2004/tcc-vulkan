@@ -25,6 +25,27 @@ struct SurfacePushConstants{
 [[vk::push_constant]]
 SurfacePushConstants pc;
 
+float3 heatmap(float t) {
+    const float3 colors[7] =
+    {
+        float3(0.00, 0.00, 0.50),
+        float3(0.00, 0.00, 1.00),
+        float3(0.00, 1.00, 1.00),
+        float3(0.00, 1.00, 0.00),
+        float3(1.00, 1.00, 0.00),
+        float3(1.00, 0.50, 0.00),
+        float3(1.00, 0.00, 0.00)
+    };
+
+    t = saturate(t);
+
+    float x = t * 6.0;
+    int i = min((int)x, 5);
+    float f = smoothstep(0.0, 1.0, frac(x));
+
+    return lerp(colors[i], colors[i + 1], f);
+}
+
 [shader("vertex")]
 VertexOutput vertMain(VertexInput input,
                       uint vid : SV_VertexID)
@@ -61,6 +82,12 @@ float4 fragMain(VertexOutput input) : SV_Target
         float3 color = lerp(blue, red, t);
 
         return float4(color, 1.0);
+    } else if(pc.renderMode == 2) {
+        float t = (input.z - pc.zMin) / (pc.zMax - pc.zMin);
+
+        t = saturate(t);
+
+        return float4(heatmap(t), 1.0);
     }
 
     return float4(0.5, 0.5, 0.5, 1.0);

@@ -7,6 +7,7 @@
 #include <thread>
 #include <atomic>
 #include "app_info.h"
+#include "simulation_metadata.h"
 
 #include <iostream>
 
@@ -15,7 +16,17 @@ public:
     App(IWindow *window, IRenderer *renderer, std::filesystem::path filename) : loader(filename), fb(10) {
         _window = window;
         _renderer = renderer;
-    
+
+        metadata.rows = loader.get_row();
+        metadata.cols = loader.get_col();
+        metadata.xExtent = loader.get_x_extent();
+        metadata.yExtent = loader.get_y_extent();
+        metadata.bathymetryZMax = loader.get_bathymetry_zmax();
+        metadata.bathymetryZMin = loader.get_bathymetry_zmin();
+
+        // Send basic simulation data to the renderer
+        _renderer->set_metadata(metadata);
+
         init_window();
         init_renderer();
 
@@ -47,4 +58,5 @@ private:
     IWindow *_window = nullptr;
     IRenderer *_renderer = nullptr;
     AppInfo info;
+    SimulationMetadata metadata;
 };

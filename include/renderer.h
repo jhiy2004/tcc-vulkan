@@ -4,6 +4,7 @@
 #include "loader.h"
 #include "window.h"
 #include "app_info.h"
+#include "simulation_metadata.h"
 
 class IRenderer {
 public:
@@ -20,5 +21,5 @@ public:
     virtual void update_frame_z_data(Frame& frame) = 0;
     virtual void update_scene(float zmin, float zmax, float dt) = 0;
     virtual Camera& get_camera() = 0;
+    virtual void set_metadata(const SimulationMetadata& metadata) = 0;
 };
-

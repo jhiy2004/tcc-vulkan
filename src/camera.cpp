@@ -90,6 +90,7 @@ float Camera::getDistance() const {
 void Camera::setYaw(float value) {
     yaw = value;
 }
+
 void Camera::setPitch(float value) {
     pitch = glm::clamp(
         value,

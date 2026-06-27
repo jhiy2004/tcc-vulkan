@@ -54,6 +54,9 @@ Loader::Loader(const std::filesystem::path& filename) : file(filename, std::ios:
             }
         }
 
+        bathymetryZMin = std::numeric_limits<float>::max();
+        bathymetryZMax = std::numeric_limits<float>::lowest();
+
         std::vector<float> z_values(row * col);
         file.read(
             reinterpret_cast<char*>(z_values.data()),
@@ -63,7 +66,17 @@ Loader::Loader(const std::filesystem::path& filename) : file(filename, std::ios:
         for (uint32_t i=0; i < row; i++) {
             for (uint32_t j=0; j < col; j++) {
                 uint32_t pos = i*col + j;
-                bathymetry_z[pos] = z_values[pos];
+                bathymetry_z[pos] = -z_values[pos];
+
+                float value{bathymetry_z[pos]};
+                
+                if (value > bathymetryZMax) {
+                    bathymetryZMax = value;
+                }
+
+                if (value < bathymetryZMin) {
+                    bathymetryZMin = value;
+                }
             }
         }
     }
@@ -110,6 +123,10 @@ bool Loader::load_frame() {
         return true;
     }
     return false;
+}
+
+int Loader::get_qtd_frames() const {
+    return qtd_frames;
 }
 
 const std::vector<Triangle>& Loader::get_triangles() const {
@@ -193,4 +210,20 @@ float Loader::get_x_extent() const {
 }
 float Loader::get_y_extent() const {
     return y_extent;
+}
+
+uint32_t Loader::get_row() const {
+    return row;
+}
+
+uint32_t Loader::get_col() const {
+    return col;
+}
+
+float Loader::get_bathymetry_zmin() const {
+    return bathymetryZMin;
+}
+
+float Loader::get_bathymetry_zmax() const {
+    return bathymetryZMax;
 }

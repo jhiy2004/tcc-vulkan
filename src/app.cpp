@@ -11,6 +11,7 @@ void App::run()
     float playbackTime = 0.0f;
 
     info.set_frame_duration(0.008f);
+    info.set_qtd_frames(loader.get_qtd_frames());
 
     Frame currentFrame;
 
@@ -40,10 +41,10 @@ void App::run()
                 currentFrame = std::move(next);
 
                 _renderer->update_frame_z_data(currentFrame);
+                info.increment_frame_count();
             }
 
             playbackTime -= frameDuration;
-            info.increment_frame_count();
         }
 
         _renderer->update_scene(
@@ -95,6 +96,10 @@ void App::frame_producer() {
         if (!res) {
             break;
         }
+
+        frame.z_data = loader.get_frame_z();
+        frame.zmin = loader.get_zmin();
+        frame.zmax = loader.get_zmax();
 
         fb.push(std::move(frame));
     }

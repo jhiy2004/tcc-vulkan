@@ -1,0 +1,10 @@
+name: swe-app
+
+services:
+  simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tsunami-simulator
+    volumes:
+      - ./simulations:/app/simulations

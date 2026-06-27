@@ -20,6 +20,10 @@ public:
         return frame_duration;
     }
 
+    int get_qtd_frames() const {
+        return qtd_frames;
+    }
+
     void set_frame_duration(float duration) {
         frame_duration = duration;
     }
@@ -31,8 +35,13 @@ public:
     void increment_frame_count() {
         frame_count++;
     }
+
+    void set_qtd_frames(int value) {
+        qtd_frames = value;
+    }
 private:
     float last_dt{};
     int frame_count{1};
+    int qtd_frames{};
     float frame_duration{1.0f/60.0f};
 };

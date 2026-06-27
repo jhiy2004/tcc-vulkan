@@ -75,10 +75,15 @@ public:
 
     bool load_frame();
 
+    uint32_t get_row() const;
+    uint32_t get_col() const;
     float get_zmin() const;
     float get_zmax() const;
+    float get_bathymetry_zmin() const;
+    float get_bathymetry_zmax() const;
     float get_x_extent() const;
     float get_y_extent() const;
+    int get_qtd_frames() const;
     std::uint32_t get_qtd_points() const;
     const std::vector<Triangle>& get_triangles() const;
     const std::vector<glm::vec2>& get_grid_xy() const;
@@ -98,6 +103,8 @@ private:
 
     float zmin{};
     float zmax{};
+    float bathymetryZMax{};
+    float bathymetryZMin{};
 
     float x_extent{};
     float y_extent{};

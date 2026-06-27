@@ -19,6 +19,7 @@
 #include "imgui_impl_glfw.h"
 
 #include "app_info.h"
+#include "simulation_metadata.h"
 
 constexpr static uint32_t MAX_FRAMES_IN_FLIGHT{2};
 
@@ -49,6 +50,9 @@ public:
     void draw(AppInfo& info) override;
     void update_frame_z_data(Frame& frame) override;
     void update_scene(float zmin, float zmax, float dt) override;
+    void set_metadata(const SimulationMetadata& metadata) override {
+        _metadata = metadata;
+    }
 
     Camera& get_camera() override;
 private:
@@ -190,6 +194,8 @@ private:
     };
 
     uint32_t _current_frame{0};
+
+    SimulationMetadata _metadata;
 
 #ifdef NDEBUG
     const bool enable_validation_layers = false;

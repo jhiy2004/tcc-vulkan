@@ -21,3 +21,7 @@ Camera& OpenGLRenderer::get_camera() {
 
 
 void OpenGLRenderer::update_scene(float zmin, float zmax, float dt) {}
+
+void OpenGLRenderer::set_metadata(const SimulationMetadata& metadata) {
+    _metadata = metadata;
+}
