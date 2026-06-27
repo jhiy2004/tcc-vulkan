@@ -48,15 +48,10 @@ void Camera::set_deltas(glm::vec3 d) {
     deltas = d;
 }
 
-void Camera::update()
+void Camera::update(float dt)
 {
-    rotate(deltas.x, deltas.y);
-    zoom(deltas.z);
-
-    glm::vec3 pos = getPosition();
-
-    std::cout << "Target: (" << target.x << "," << target.y << "," << target.z << ")" << std::endl;
-    std::cout << "Pos: (" << pos.x << "," << pos.y << "," << pos.z << ")" << std::endl;
+    rotate(deltas.x * dt, deltas.y * dt);
+    zoom(deltas.z * dt);
 }
 
 void Camera::rotate(float deltaYaw, float deltaPitch)
@@ -105,4 +100,8 @@ void Camera::setPitch(float value) {
 
 void Camera::setDistance(float value) {
     distance = value;
+}
+
+void Camera::setTarget(glm::vec3&& t) {
+    target = t;
 }

@@ -48,7 +48,8 @@ void App::run()
 
         _renderer->update_scene(
             currentFrame.zmin,
-            currentFrame.zmax
+            currentFrame.zmax,
+            dt
         );
         _renderer->draw(info);
     }
@@ -73,7 +74,15 @@ void App::init_renderer() {
         return;
     }
 
-    _renderer->init(_window, loader.get_grid_xy(), loader.get_bathymetry_z(), loader.get_triangles());
+    _renderer->init(
+        _window,
+        loader.get_grid_xy(),
+        loader.get_bathymetry_z(),
+        loader.get_triangles(),
+        loader.get_x_extent(),
+        loader.get_y_extent()
+    );
+    
     std::cout << "_renderer inicializado com sucesso\n";
 }
 

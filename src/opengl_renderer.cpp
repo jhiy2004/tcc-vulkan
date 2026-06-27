@@ -3,7 +3,9 @@
 void OpenGLRenderer::init(IWindow *window, 
                           const std::vector<glm::vec2>& grid,
                           const std::vector<float>& bathymetryZ,
-                          const std::vector<Triangle>& triangles
+                          const std::vector<Triangle>& triangles,
+                          float x_extent,
+                          float y_extent
                           ) {
     return;
 }
@@ -18,4 +20,4 @@ Camera& OpenGLRenderer::get_camera() {
 }
 
 
-void OpenGLRenderer::update_scene(float zmin, float zmax) {}
+void OpenGLRenderer::update_scene(float zmin, float zmax, float dt) {}

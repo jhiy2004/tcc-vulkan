@@ -11,11 +11,13 @@ public:
     void init(IWindow* window, 
               const std::vector<glm::vec2>& grid,
               const std::vector<float>& bathymetryZ,
-              const std::vector<Triangle>& triangles
+              const std::vector<Triangle>& triangles,
+              float x_extent,
+              float y_extent
               ) override;
     void draw(AppInfo& info) override;
 
-    void update_scene(float zmin, float zmax) override;
+    void update_scene(float zmin, float zmax, float dt) override;
     Camera& get_camera() override;
 private:
     Camera camera;

@@ -19,13 +19,13 @@ void GLFWVulkanWindow::camera_input_handler(int key, int action) {
     return;
 
 
-  float angle_vel = 2.0f; 
+  float angle_vel = 60.0f; 
   if (action == GLFW_PRESS) {
     if (key == GLFW_KEY_W) {
-      _camera->set_deltas(glm::vec3(0, 0, -1));
+      _camera->set_deltas(glm::vec3(0, 0, -100));
     }
     if (key == GLFW_KEY_S) {
-      _camera->set_deltas(glm::vec3(0, 0, 1));
+      _camera->set_deltas(glm::vec3(0, 0, 100));
     }
     if (key == GLFW_KEY_A) {
       _camera->set_deltas(glm::vec3(-angle_vel, 0, 0));

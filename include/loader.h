@@ -77,6 +77,8 @@ public:
 
     float get_zmin() const;
     float get_zmax() const;
+    float get_x_extent() const;
+    float get_y_extent() const;
     std::uint32_t get_qtd_points() const;
     const std::vector<Triangle>& get_triangles() const;
     const std::vector<glm::vec2>& get_grid_xy() const;
@@ -96,4 +98,7 @@ private:
 
     float zmin{};
     float zmax{};
+
+    float x_extent{};
+    float y_extent{};
 };

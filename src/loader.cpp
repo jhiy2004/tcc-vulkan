@@ -15,12 +15,14 @@ Loader::Loader(const std::filesystem::path& filename) : file(filename, std::ios:
         qtd_frames = header.qtd_frames;
         row = header.row;
         col = header.col;
+        x_extent = header.x_extent;
+        y_extent = header.y_extent;
 
         std::cout << "Type: " << static_cast<int>(type) << std::endl;
         std::cout << "Row: " << row << std::endl;
         std::cout << "Col: " << row << std::endl;
-        std::cout << "X extent: " << header.x_extent << std::endl;
-        std::cout << "Y extent: " << header.y_extent << std::endl;
+        std::cout << "X extent: " << x_extent << std::endl;
+        std::cout << "Y extent: " << y_extent << std::endl;
 
         uint32_t qtd_triangles = 2 * (row-1) * (col-1);
         frame_z = std::vector<float>(row * col);
@@ -29,8 +31,8 @@ Loader::Loader(const std::filesystem::path& filename) : file(filename, std::ios:
 
         triangles = std::vector<Triangle>(qtd_triangles);
 
-        float dx = static_cast<float>(header.x_extent) / (col - 1);
-        float dy = static_cast<float>(header.y_extent) / (row - 1);
+        float dx = static_cast<float>(x_extent) / (col - 1);
+        float dy = static_cast<float>(y_extent) / (row - 1);
         for (uint32_t i=0; i < row; i++) {
             for (uint32_t j=0; j < col; j++) {
                 uint32_t pos = i*col + j;
@@ -184,4 +186,11 @@ float Loader::get_zmin() const {
 
 float Loader::get_zmax() const {
     return zmax;
+}
+
+float Loader::get_x_extent() const {
+    return x_extent;
+}
+float Loader::get_y_extent() const {
+    return y_extent;
 }

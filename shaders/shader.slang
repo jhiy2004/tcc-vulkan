@@ -2,10 +2,6 @@
 cbuffer UniformBuffer : register(b0)
 {
     float4x4 mvp;
-    float zMin;
-    float zMax;
-
-    uint16_t colorByHeight;
 };
 
 struct VertexInput
@@ -19,6 +15,15 @@ struct VertexOutput
     float z : TEXCOORD0;
     float4 position : SV_Position;
 };
+
+struct SurfacePushConstants{
+    uint renderMode;
+    float zMin;
+    float zMax;
+};
+
+[[vk::push_constant]]
+SurfacePushConstants pc;
 
 [shader("vertex")]
 VertexOutput vertMain(VertexInput input,
@@ -43,18 +48,20 @@ VertexOutput vertMain(VertexInput input,
 [shader("fragment")]
 float4 fragMain(VertexOutput input) : SV_Target
 {
-    if (colorByHeight == 0) {
+    if (pc.renderMode == 0) {
         return float4(1.0, 1.0, 1.0, 1.0);
+    } else if (pc.renderMode == 1) {
+        float t = (input.z - pc.zMin) / (pc.zMax - pc.zMin);
+
+        t = saturate(t);
+
+        float3 blue = float3(0.0, 0.0, 1.0);
+        float3 red  = float3(1.0, 0.0, 0.0);
+
+        float3 color = lerp(blue, red, t);
+
+        return float4(color, 1.0);
     }
 
-    float t = (input.z - zMin) / (zMax - zMin);
-
-    t = saturate(t);
-
-    float3 blue = float3(0.0, 0.0, 1.0);
-    float3 red  = float3(1.0, 0.0, 0.0);
-
-    float3 color = lerp(blue, red, t);
-
-    return float4(color, 1.0);
+    return float4(0.5, 0.5, 0.5, 1.0);
 }

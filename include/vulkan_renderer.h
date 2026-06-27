@@ -26,10 +26,12 @@ constexpr static uint32_t MAX_FRAMES_IN_FLIGHT{2};
 struct UniformBufferObject
 {
     glm::mat4 mvp;
+};
+
+struct SurfacePushConstants {
+    uint32_t renderMode;
     float zMin;
     float zMax;
-
-    uint16_t colorByHeight;
 };
 
 class VulkanRenderer : public IRenderer {
@@ -40,11 +42,13 @@ public:
     void init(IWindow* window,
               const std::vector<glm::vec2>& grid,
               const std::vector<float>& bathymetryZ,
-              const std::vector<Triangle>& triangles
+              const std::vector<Triangle>& triangles,
+              float x_extent,
+              float y_extent
               ) override;
     void draw(AppInfo& info) override;
     void update_frame_z_data(Frame& frame) override;
-    void update_scene(float zmin, float zmax) override;
+    void update_scene(float zmin, float zmax, float dt) override;
 
     Camera& get_camera() override;
 private:
@@ -60,6 +64,13 @@ private:
     void init_imgui();
     void draw_imgui(AppInfo& info);
     void cleanup_imgui();
+
+    void create_depth_image();
+    void create_depth_image_view();
+
+    VkImage _depth_image;
+    VkDeviceMemory _depth_image_memory;
+    VkImageView _depth_image_view;
 
     VkDescriptorPool _imgui_descriptor_pool{};
 
@@ -85,7 +96,8 @@ private:
     void create_command_buffers();
 
     void transition_image_layout(
-        uint32_t imageIndex,
+        VkImage image,
+        VkImageAspectFlags aspectMask,
         VkImageLayout oldLayout,
         VkImageLayout newLayout,
         VkAccessFlags2 srcAccessMask,
@@ -134,6 +146,8 @@ private:
 
     // Indices information
     uint32_t _indices_size{};
+
+    SurfacePushConstants _frame_data{};
 
     bool _framebuffer_resized{false};
     std::vector<const char*> required_device_extension = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
