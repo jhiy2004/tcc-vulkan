@@ -8,7 +8,7 @@ Camera::Camera()
     : target(0.0f, 0.0f, 0.0f),
       distance(200.0f),
       yaw(0.0f),
-      pitch(-30.0f),
+      pitch(0.0f),
       deltas(0.0f)
 {
 }
@@ -22,15 +22,15 @@ glm::vec3 Camera::getPosition() const
 
     position.x =
         target.x +
-        distance * cos(pitchRad) * sin(yawRad);
+        distance * cos(pitchRad) * cos(yawRad);
 
     position.y =
         target.y +
-        distance * sin(pitchRad);
+        distance * cos(pitchRad) * sin(yawRad);
 
     position.z =
         target.z +
-        distance * cos(pitchRad) * cos(yawRad);
+        distance * sin(pitchRad);
 
     return position;
 }
@@ -40,7 +40,7 @@ glm::mat4 Camera::getViewMatrix()
     return glm::lookAt(
         getPosition(),
         target,
-        glm::vec3(0.0f, 1.0f, 0.0f)
+        glm::vec3(0.0f, 0.0f, 1.0f)
     );
 }
 
