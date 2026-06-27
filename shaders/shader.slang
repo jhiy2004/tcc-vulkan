@@ -20,6 +20,7 @@ struct SurfacePushConstants{
     uint renderMode;
     float zMin;
     float zMax;
+    float zScale;
 };
 
 [[vk::push_constant]]
@@ -55,7 +56,7 @@ VertexOutput vertMain(VertexInput input,
     output.position = float4(
         input.xy.x,
         input.xy.y,
-        input.z,
+        input.z * pc.zScale,
         1.0
     );
 

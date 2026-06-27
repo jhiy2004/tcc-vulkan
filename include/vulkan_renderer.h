@@ -33,6 +33,14 @@ struct SurfacePushConstants {
     uint32_t renderMode;
     float zMin;
     float zMax;
+    float zScale;
+};
+
+struct RenderSettings {
+    float surfaceZScale{30.0f};
+    float bathymetryZScale{1.0f};
+    int bathymetryRenderMode{2};
+    int surfaceRenderMode{2};
 };
 
 class VulkanRenderer : public IRenderer {
@@ -196,6 +204,7 @@ private:
     uint32_t _current_frame{0};
 
     SimulationMetadata _metadata;
+    RenderSettings _settings;
 
 #ifdef NDEBUG
     const bool enable_validation_layers = false;
