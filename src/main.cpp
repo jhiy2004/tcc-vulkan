@@ -10,7 +10,12 @@
 #include "vulkan_renderer.h"
 #include "opengl_renderer.h"
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <simulation_file.sim>" << std::endl;
+        return 1;
+    }
+
     std::cout << "Started application" << std::endl;
 
     GLFWVulkanWindow vk_window(800, 600, "Vulkan App");
@@ -18,7 +23,7 @@ int main() {
     //OpenGLRenderer gl_renderer;
     VulkanRenderer vk_renderer;
 
-    App app(&vk_window, &vk_renderer, std::filesystem::path(FILES_DIR) / "example4.sim");
+    App app(&vk_window, &vk_renderer, std::filesystem::path(FILES_DIR) / argv[1]);
 
     app.run();
 

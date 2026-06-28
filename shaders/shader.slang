@@ -73,9 +73,13 @@ float4 fragMain(VertexOutput input) : SV_Target
     if (pc.renderMode == 0) {
         return float4(1.0, 1.0, 1.0, 1.0);
     } else if (pc.renderMode == 1) {
-        float t = (input.z - pc.zMin) / (pc.zMax - pc.zMin);
+        float t;
 
-        t = saturate(t);
+        if (pc.zMax > pc.zMin) {
+            t = saturate((input.z - pc.zMin) / (pc.zMax - pc.zMin));
+        } else {
+            t = 0.5;
+        }
 
         float3 blue = float3(0.0, 0.0, 1.0);
         float3 red  = float3(1.0, 0.0, 0.0);
@@ -83,10 +87,14 @@ float4 fragMain(VertexOutput input) : SV_Target
         float3 color = lerp(blue, red, t);
 
         return float4(color, 1.0);
-    } else if(pc.renderMode == 2) {
-        float t = (input.z - pc.zMin) / (pc.zMax - pc.zMin);
+    } else if (pc.renderMode == 2) {
+        float t;
 
-        t = saturate(t);
+        if (pc.zMax > pc.zMin) {
+            t = saturate((input.z - pc.zMin) / (pc.zMax - pc.zMin));
+        } else {
+            t = 0.5;
+        }
 
         return float4(heatmap(t), 1.0);
     }

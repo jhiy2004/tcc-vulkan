@@ -23,4 +23,5 @@ RUN mkdir -p /app/simulations
 # Pasta persistente para resultados
 VOLUME ["/app/simulations"]
 
-CMD ["python", "main.py"]
+ENTRYPOINT ["python", "main.py"]
+CMD []

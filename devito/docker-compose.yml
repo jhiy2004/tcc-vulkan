@@ -6,5 +6,12 @@ services:
       context: .
       dockerfile: Dockerfile
     image: tsunami-simulator
+    command:
+      - "--example"
+      - "3"
+      - "--frames"
+      - "500"
+      - "--buffer-size"
+      - "1000"
     volumes:
       - ./simulations:/app/simulations
