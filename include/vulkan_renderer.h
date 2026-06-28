@@ -21,7 +21,7 @@
 #include "app_info.h"
 #include "simulation_metadata.h"
 
-constexpr static uint32_t MAX_FRAMES_IN_FLIGHT{2};
+constexpr static uint32_t MAX_FRAMES_IN_FLIGHT{2}; 
 
 // Deve ser um multiplo de 16 para manter o alinhamento
 struct UniformBufferObject
@@ -55,12 +55,14 @@ public:
               float x_extent,
               float y_extent
               ) override;
-    void draw(AppInfo& info) override;
+    void draw(AppInfo& info, PlaybackState& playback_state) override;
     void update_frame_z_data(Frame& frame) override;
     void update_scene(float zmin, float zmax, float dt) override;
     void set_metadata(const SimulationMetadata& metadata) override {
         _metadata = metadata;
     }
+
+    void recreate_swap_chain();
 
     Camera& get_camera() override;
 private:
@@ -74,8 +76,9 @@ private:
     void create_graphics_pipeline();
     void create_descriptor_set_layout();
     void init_imgui();
-    void draw_imgui(AppInfo& info);
+    void draw_imgui(AppInfo& info, PlaybackState& playback_state);
     void cleanup_imgui();
+    void cleanup_depth_resources();
 
     void create_depth_image();
     void create_depth_image_view();
@@ -103,7 +106,7 @@ private:
     );
 
     VkShaderModule create_shader_module(const std::vector<char> &code) const;
-    void record_command_buffer(uint32_t imageIndex, AppInfo& info);
+    void record_command_buffer(uint32_t imageIndex, AppInfo& info, PlaybackState& playback_state);
     void create_command_pools();
     void create_command_buffers();
 
@@ -119,7 +122,6 @@ private:
     );
 
     void create_sync_objects();
-    void recreate_swap_chain();
     void cleanup_swap_chain();
 
 
@@ -161,7 +163,6 @@ private:
 
     SurfacePushConstants _frame_data{};
 
-    bool _framebuffer_resized{false};
     std::vector<const char*> required_device_extension = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
     GLFWwindow* _window{nullptr};

@@ -18,12 +18,6 @@ Loader::Loader(const std::filesystem::path& filename) : file(filename, std::ios:
         x_extent = header.x_extent;
         y_extent = header.y_extent;
 
-        std::cout << "Type: " << static_cast<int>(type) << std::endl;
-        std::cout << "Row: " << row << std::endl;
-        std::cout << "Col: " << row << std::endl;
-        std::cout << "X extent: " << x_extent << std::endl;
-        std::cout << "Y extent: " << y_extent << std::endl;
-
         uint32_t qtd_triangles = 2 * (row-1) * (col-1);
         frame_z = std::vector<float>(row * col);
         bathymetry_z = std::vector<float>(row * col);
@@ -79,6 +73,9 @@ Loader::Loader(const std::filesystem::path& filename) : file(filename, std::ios:
                 }
             }
         }
+
+        first_frame_offset = file.tellg();
+        stride = static_cast<std::streampos>(row * col * sizeof(float));
     }
 }
 
@@ -125,7 +122,7 @@ bool Loader::load_frame() {
     return false;
 }
 
-int Loader::get_qtd_frames() const {
+uint32_t Loader::get_qtd_frames() const {
     return qtd_frames;
 }
 
@@ -148,54 +145,6 @@ const std::vector<float>& Loader::get_bathymetry_z() const {
 std::uint32_t Loader::get_qtd_points() const {
     return static_cast<uint32_t>(grid_xy.size());
 }
-
-FrameBuffer::FrameBuffer(size_t c) : capacity(c) {}
-
-void FrameBuffer::push(Frame frame) {
-    std::unique_lock<std::mutex> lock(mutex);
-
-    cv_not_full.wait(lock, [this]() {
-        return queue.size() < capacity || finished;
-    });
-
-    if (finished)
-        return;
-
-    queue.push(std::move(frame));
-
-    lock.unlock();
-    cv_not_empty.notify_one();
-}
-
-bool FrameBuffer::pop(Frame& out) {
-    std::unique_lock<std::mutex> lock(mutex);
-
-    cv_not_empty.wait(lock, [this]() {
-        return !queue.empty() || finished;
-    });
-
-    if (queue.empty())
-        return false;
-
-    out = std::move(queue.front());
-    queue.pop();
-
-    lock.unlock();
-    cv_not_full.notify_one();
-
-    return true;
-}
-
-void FrameBuffer::set_finished() {
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        finished = true;
-    }
-
-    cv_not_empty.notify_all();
-    cv_not_full.notify_all();
-}
-
 
 float Loader::get_zmin() const {
     return zmin;
@@ -226,4 +175,93 @@ float Loader::get_bathymetry_zmin() const {
 
 float Loader::get_bathymetry_zmax() const {
     return bathymetryZMax;
+}
+
+void Loader::set_current_frame(uint32_t frame) {
+    if (frame > qtd_frames || frame <= 0) return;
+    
+#ifndef NDEBUG
+    std::cerr << "Setting current frame to: " << frame << "\n";
+#endif
+    auto pos {first_frame_offset + static_cast<std::streamoff>(frame - 1) * stride};
+    current_frame = frame;
+
+    file.seekg(pos, file.beg);
+}
+
+FrameBuffer::FrameBuffer(size_t c) : capacity(c) {}
+
+void FrameBuffer::push(Frame frame) {
+    std::unique_lock<std::mutex> lock(mutex);
+
+    cv_not_full.wait(lock, [this]() {
+        return queue.size() < capacity || finished || cancel;
+    });
+
+    if (finished || cancel) {
+        std::cerr << "FrameBuffer::push: finished or cancel is true, not pushing frame\n";
+        return;
+    }
+
+    std::cerr << "FrameBuffer::push: pushing frame with zmin=" << frame.zmin << ", zmax=" << frame.zmax << "\n";
+
+    queue.push(std::move(frame));
+
+    lock.unlock();
+    cv_not_empty.notify_one();
+}
+
+bool FrameBuffer::pop(Frame& out) {
+    std::unique_lock<std::mutex> lock(mutex);
+
+    cv_not_empty.wait(lock, [this]() {
+        return !queue.empty() || finished || cancel;
+    });
+
+    if (cancel)
+        return false;
+
+    if (queue.empty())
+        return false;
+
+    out = std::move(queue.front());
+    queue.pop();
+
+    lock.unlock();
+    cv_not_full.notify_one();
+
+    return true;
+}
+
+void FrameBuffer::set_finished() {
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        finished = true;
+    }
+
+    cv_not_empty.notify_all();
+    cv_not_full.notify_all();
+}
+
+void FrameBuffer::clear()
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    std::queue<Frame> empty;
+    std::swap(queue, empty);
+
+    finished = false;
+    cancel = true;
+
+    cv_not_full.notify_all();
+
+    std::cerr << "FrameBuffer::clear: cleared the queue and set cancel to true\n";
+}
+
+void FrameBuffer::reset_cancel()
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    cancel = false;
+
+    std::cerr << "FrameBuffer::reset_cancel: reset cancel to false\n";
 }

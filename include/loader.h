@@ -58,11 +58,14 @@ private:
     std::condition_variable cv_not_full;
     std::condition_variable cv_not_empty;
     size_t capacity;
-    bool finished = false;
+    bool finished{false};
+    bool cancel{false};
 
 public:
     FrameBuffer(size_t c);
 
+    void reset_cancel();
+    void clear();
     void push(Frame frame);
     bool pop(Frame& out);
     void set_finished();
@@ -74,6 +77,7 @@ public:
     ~Loader();
 
     bool load_frame();
+    void set_current_frame(uint32_t frame);
 
     uint32_t get_row() const;
     uint32_t get_col() const;
@@ -83,7 +87,7 @@ public:
     float get_bathymetry_zmax() const;
     float get_x_extent() const;
     float get_y_extent() const;
-    int get_qtd_frames() const;
+    uint32_t get_qtd_frames() const;
     std::uint32_t get_qtd_points() const;
     const std::vector<Triangle>& get_triangles() const;
     const std::vector<glm::vec2>& get_grid_xy() const;
@@ -91,8 +95,8 @@ public:
     const std::vector<float>& get_bathymetry_z() const;
 private:
     std::ifstream file;
-    int current_frame{};
-    int qtd_frames{};
+    uint32_t current_frame{1};
+    uint32_t qtd_frames{};
     char type;
     uint32_t row;
     uint32_t col;
@@ -108,4 +112,7 @@ private:
 
     float x_extent{};
     float y_extent{};
+
+    std::streampos stride{};
+    std::streampos first_frame_offset{};
 };

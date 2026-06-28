@@ -33,3 +33,7 @@ bool GLFWOpenGLWindow::shouldClose() {
 void GLFWOpenGLWindow::set_camera(Camera *camera) {
     _camera = camera;
 }
+
+bool GLFWOpenGLWindow::consume_framebuffer_resized() {
+    return false;
+}

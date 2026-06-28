@@ -225,22 +225,17 @@ void VulkanRenderer::init(
     return;
 }
 
-void VulkanRenderer::draw(AppInfo& info) {
-#ifdef NDEBUG
-    std::cerr << "Started draw\n";
-#endif
-
+void VulkanRenderer::draw(AppInfo& info, PlaybackState& playback_state) {
     vkWaitForFences(_device, 1, &_draw_fences[_current_frame], VK_TRUE, UINT64_MAX);
 
     uint32_t imageIndex{};
     VkResult result = vkAcquireNextImageKHR(_device, _swap_chain, UINT64_MAX, _present_complete_semaphores[_current_frame], nullptr, &imageIndex);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-        _framebuffer_resized = false;
         recreate_swap_chain();
     }
 
-    record_command_buffer(imageIndex, info);
+    record_command_buffer(imageIndex, info, playback_state);
 
     vkResetFences(_device, 1, &_draw_fences[_current_frame]);
 
@@ -279,10 +274,6 @@ void VulkanRenderer::draw(AppInfo& info) {
     }
 
     _current_frame = (_current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
-
-#ifdef NDEBUG
-    std::cerr << "Ended draw\n";
-#endif
 }
 
 std::vector<const char*> VulkanRenderer::get_required_instance_extensions()
@@ -632,9 +623,9 @@ VkExtent2D VulkanRenderer::choose_swap_extent(GLFWwindow* window, VkSurfaceCapab
     int width, height;
     glfwGetFramebufferSize(window, &width, &height);
 
-    return {
-        std::clamp<uint32_t>(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
-        std::clamp<uint32_t>(height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
+    return VkExtent2D{
+        .width = std::clamp<uint32_t>(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+        .height = std::clamp<uint32_t>(height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
     };
 }
 
@@ -881,7 +872,7 @@ void VulkanRenderer::create_graphics_pipeline() {
     };
 
     VkPushConstantRange range{
-        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
         .offset = 0,
         .size = sizeof(SurfacePushConstants),
     };
@@ -948,9 +939,7 @@ VkShaderModule VulkanRenderer::create_shader_module(const std::vector<char> &cod
     return shaderModule;
 }
 
-void VulkanRenderer::record_command_buffer(uint32_t imageIndex, AppInfo& info) {
-    std::cout << "Started record cmd buffer" << std::endl;
-
+void VulkanRenderer::record_command_buffer(uint32_t imageIndex, AppInfo& info, PlaybackState& playback_state) {
     VkCommandBufferBeginInfo beginInfo {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
     };
@@ -1068,7 +1057,7 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex, AppInfo& info) {
     _frame_data.renderMode = _settings.bathymetryRenderMode;
     _frame_data.zScale = _settings.bathymetryZScale;
 
-    vkCmdPushConstants(_command_buffers[_current_frame], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SurfacePushConstants), &_frame_data);
+    vkCmdPushConstants(_command_buffers[_current_frame], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(SurfacePushConstants), &_frame_data);
     vkCmdDrawIndexed(_command_buffers[_current_frame], _indices_size, 1, 0, 0, 0);
 
 
@@ -1078,10 +1067,10 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex, AppInfo& info) {
     _frame_data.zMin = temp_min;
     _frame_data.renderMode = _settings.surfaceRenderMode;
     _frame_data.zScale = _settings.surfaceZScale;
-    vkCmdPushConstants(_command_buffers[_current_frame], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SurfacePushConstants), &_frame_data);
+    vkCmdPushConstants(_command_buffers[_current_frame], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(SurfacePushConstants), &_frame_data);
     vkCmdDrawIndexed(_command_buffers[_current_frame], _indices_size, 1, 0, 0, 0);
 
-    draw_imgui(info);
+    draw_imgui(info, playback_state);
 
     // End rendering
     vkCmdEndRendering(_command_buffers[_current_frame]);
@@ -1099,8 +1088,6 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex, AppInfo& info) {
     );
 
     vkEndCommandBuffer(_command_buffers[_current_frame]);
-
-    std::cout << "Ended record cmd buffer" << std::endl;
 }
 
 void VulkanRenderer::create_command_pools() {
@@ -1215,17 +1202,31 @@ void VulkanRenderer::create_sync_objects() {
 }
 
 void VulkanRenderer::cleanup_swap_chain() {
+    for (auto imageView : _swap_chain_image_views) {
+        vkDestroyImageView(_device, imageView, nullptr);
+    }
+
     _swap_chain_image_views.clear();
-    _swap_chain = nullptr;
+    vkDestroySwapchainKHR(_device, _swap_chain, nullptr);
 }
 
 void VulkanRenderer::recreate_swap_chain() {
+#ifndef NDEBUG
+    std::cerr << "Recreating swap chain\n";
+#endif
+
     vkDeviceWaitIdle(_device);
 
+    // Clean old resources
     cleanup_swap_chain();
+    cleanup_depth_resources();
 
+    // Create new resources
     create_swap_chain();
     create_image_views();
+
+    create_depth_image();
+    create_depth_image_view();
 }
 
 uint32_t VulkanRenderer::find_memory_type(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
@@ -1384,9 +1385,6 @@ void VulkanRenderer::update_frame_z_data(Frame& frame) {
 }
 
 void VulkanRenderer::update_scene(float zmin, float zmax, float dt) {
-#ifdef NDEBUG
-    std::cerr << "Started updated scene\n";
-#endif
     camera.update(dt);
 
     _frame_data.zMin = zmin;
@@ -1405,10 +1403,6 @@ void VulkanRenderer::update_scene(float zmin, float zmax, float dt) {
     ubo.mvp = mvp;
 
     memcpy(uniformBufferMapped, &ubo, sizeof(ubo));
-
-#ifdef NDEBUG
-    std::cerr << "Ended update scene\n";
-#endif
 }
 
 Camera& VulkanRenderer::get_camera() {
@@ -1573,7 +1567,7 @@ void VulkanRenderer::init_imgui() {
         .viewMask = 0,
         .colorAttachmentCount = 1,
         .pColorAttachmentFormats = &format,
-        .depthAttachmentFormat = VK_FORMAT_UNDEFINED,
+        .depthAttachmentFormat = VK_FORMAT_D32_SFLOAT,
         .stencilAttachmentFormat = VK_FORMAT_UNDEFINED
     };
 
@@ -1603,23 +1597,33 @@ void VulkanRenderer::init_imgui() {
 #endif
 }
 
-void VulkanRenderer::draw_imgui(AppInfo& info) {
+void VulkanRenderer::draw_imgui(AppInfo& info, PlaybackState& playback_state) {
     // Camera data
     float yaw{camera.getYaw()};
     float pitch{camera.getPitch()};
     float distance{camera.getDistance()};
     
     // Simulation data
-    float duration{info.get_frame_duration()};
+    float duration{playback_state.frameDuration};
     int qtd_frames{info.get_qtd_frames()};
-    int count{info.get_frame_count()};
+    uint32_t count{playback_state.currentFrame};
     float ratio{static_cast<float>(count) / static_cast<float>(qtd_frames)};
+    uint32_t current_frame{playback_state.currentFrame};
 
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
     ImGui::Begin("Shallow Water Equations - Vulkan Renderer");
+
+    ImGui::Text("Playback controls");
+    if (ImGui::Button(playback_state.isPaused ? "Play" : "Pause")) {
+        playback_state.isPaused = !playback_state.isPaused;
+    }
+    ImGui::InputFloat("Minimum time on each simulation frame", &duration);
+    ImGui::InputScalar("Current Frame", ImGuiDataType_U32, &current_frame);
+
+    ImGui::Separator();
 
     ImGui::Text("Simulation data");
     ImGui::Text("Rows: %d", _metadata.rows);
@@ -1633,9 +1637,8 @@ void VulkanRenderer::draw_imgui(AppInfo& info) {
 
     ImGui::Text("Frame rate: %d FPS", info.get_fps());
     ImGui::Text("Amount of simulation frames: %d", info.get_qtd_frames());
-    ImGui::Text("Current simulation frame: %d", info.get_frame_count());
+    ImGui::Text("Current simulation frame: %d", count);
     ImGui::Text("Simulation Progress");
-    ImGui::InputFloat("Minimum time on each simulation frame", &duration);
     ImGui::ProgressBar(ratio);
 
     ImGui::Separator();
@@ -1646,7 +1649,7 @@ void VulkanRenderer::draw_imgui(AppInfo& info) {
     ImGui::InputFloat("Distance", &distance);
 
     ImGui::Separator();
-    
+
     ImGui::Text("Rendering settings");
     ImGui::InputFloat("Surface Z Scale", &_settings.surfaceZScale);
     ImGui::InputFloat("Bathymetry Z Scale", &_settings.bathymetryZScale);
@@ -1659,7 +1662,9 @@ void VulkanRenderer::draw_imgui(AppInfo& info) {
 
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), _command_buffers[_current_frame]);
 
-    info.set_frame_duration(duration);
+    playback_state.frameDuration = duration;
+    playback_state.currentFrame = current_frame;
+
     camera.setYaw(yaw);
     camera.setPitch(pitch);
     camera.setDistance(distance);
@@ -1800,4 +1805,11 @@ void VulkanRenderer::create_depth_image_view()
 #ifndef NDEBUG
     std::cerr << "Created depth image view\n";
 #endif
+}
+
+void VulkanRenderer::cleanup_depth_resources()
+{
+    vkDestroyImageView(_device, _depth_image_view, nullptr);
+    vkDestroyImage(_device, _depth_image, nullptr);
+    vkFreeMemory(_device, _depth_image_memory, nullptr);
 }

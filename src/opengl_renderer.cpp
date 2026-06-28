@@ -10,7 +10,7 @@ void OpenGLRenderer::init(IWindow *window,
     return;
 }
 
-void OpenGLRenderer::draw(AppInfo &info) {
+void OpenGLRenderer::draw(AppInfo &info, PlaybackState &playback_state) {
     glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 }
@@ -24,4 +24,9 @@ void OpenGLRenderer::update_scene(float zmin, float zmax, float dt) {}
 
 void OpenGLRenderer::set_metadata(const SimulationMetadata& metadata) {
     _metadata = metadata;
+}
+
+void OpenGLRenderer::recreate_swap_chain() {
+    // No swap chain in OpenGL, so nothing to do here
+    return;
 }

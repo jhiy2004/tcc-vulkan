@@ -18,7 +18,7 @@ int main() {
     //OpenGLRenderer gl_renderer;
     VulkanRenderer vk_renderer;
 
-    App app(&vk_window, &vk_renderer, std::filesystem::path(FILES_DIR) / "example.sim");
+    App app(&vk_window, &vk_renderer, std::filesystem::path(FILES_DIR) / "example4.sim");
 
     app.run();
 

@@ -21,12 +21,17 @@ public:
     }
 
     void set_camera(Camera *camera) override;
+
+    bool consume_framebuffer_resized() override;
+
     static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+    static void framebuffer_resize_callback(GLFWwindow *window, int width, int height);
+
     void camera_input_handler(int key, int action);
 
     ~GLFWVulkanWindow() {
         std::cout << "Destroy glfw vulkan window" << std::endl;
-        
+        _framebuffer_resized = false;
         glfwDestroyWindow(_window);
         glfwTerminate();
     }
@@ -36,4 +41,5 @@ private:
     std::string _title;
     GLFWwindow *_window = nullptr;
     Camera *_camera = nullptr;
+    bool _framebuffer_resized{false};
 };

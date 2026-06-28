@@ -10,7 +10,7 @@ void App::run()
 
     float playbackTime = 0.0f;
 
-    info.set_frame_duration(0.008f);
+    playback_state.frameDuration = 0.008f;
     info.set_qtd_frames(loader.get_qtd_frames());
 
     Frame currentFrame;
@@ -18,6 +18,13 @@ void App::run()
     fb.pop(currentFrame);
 
     while (!_window->shouldClose()) {
+        if (_window->consume_framebuffer_resized()) {
+            _renderer->recreate_swap_chain();
+        }
+        
+
+        uint32_t prevFrame = playback_state.currentFrame;
+
         auto now = clock::now();
 
         float dt = std::chrono::duration<float>(
@@ -33,15 +40,12 @@ void App::run()
         // controla apenas a simulação
         playbackTime += dt;
 
-        float frameDuration{info.get_frame_duration()};
+        float frameDuration{playback_state.frameDuration};
         if (playbackTime >= frameDuration) {
-            Frame next;
-
-            if (fb.pop(next)) {
-                currentFrame = std::move(next);
-
+            if (!playback_state.isPaused && fb.pop(currentFrame)) {
                 _renderer->update_frame_z_data(currentFrame);
-                info.increment_frame_count();
+                
+                playback_state.currentFrame++;
             }
 
             playbackTime -= frameDuration;
@@ -52,7 +56,38 @@ void App::run()
             currentFrame.zmax,
             dt
         );
-        _renderer->draw(info);
+        _renderer->draw(info, playback_state);
+
+        if (playback_state.isPaused && prevFrame != playback_state.currentFrame) {
+        #ifndef NDEBUG
+            std::cerr << "Changed frame\n";
+        #endif
+
+            {
+                std::scoped_lock lock(_loaderMutex);
+
+                loader.set_current_frame(playback_state.currentFrame);
+                fb.clear();
+                fb.reset_cancel();
+            }
+
+            {
+                std::lock_guard lock(_producerMutex);
+                _restartProducer = true;
+            }
+
+            _producerCv.notify_one();
+
+            // Gambiarra
+            fb.pop(currentFrame);
+
+            // Load user chosen frame
+            if (fb.pop(currentFrame)) {
+                std::cerr << "Loaded user chosen frame with zmin=" << currentFrame.zmin << ", zmax=" << currentFrame.zmax << "\n";
+
+                _renderer->update_frame_z_data(currentFrame);
+            }
+        }
     }
 
     std::cout << "Closed application" << std::endl;
@@ -88,20 +123,45 @@ void App::init_renderer() {
 }
 
 void App::frame_producer() {
-    Frame frame;
-
     while (_running) {
-        bool res = loader.load_frame();
+        {
+            std::unique_lock lock(_producerMutex);
 
-        if (!res) {
-            break;
+            _producerCv.wait(lock, [&] {
+                return !_running || _restartProducer;
+            });
+
+            if (!_running)
+                break;
+
+            _restartProducer = false;
         }
 
-        frame.z_data = loader.get_frame_z();
-        frame.zmin = loader.get_zmin();
-        frame.zmax = loader.get_zmax();
+        while (_running) {
+            Frame frame;
+            bool res;
+            {
+                std::scoped_lock lock(_loaderMutex);
 
-        fb.push(std::move(frame));
+                res = loader.load_frame();
+
+                if (!res) {
+                    fb.set_finished();
+                    break;
+                }
+
+                frame.z_data = loader.get_frame_z();
+                frame.zmin   = loader.get_zmin();
+                frame.zmax   = loader.get_zmax();
+            }
+
+            fb.push(std::move(frame));
+
+            // Usuário mudou o frame enquanto produzíamos?
+            if (_restartProducer) {
+                std::cerr << "frame_producer: reiniciando produção de frames\n";
+                break;
+            };
+        }
     }
-    fb.set_finished();
 }

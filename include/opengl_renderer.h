@@ -16,11 +16,12 @@ public:
               float x_extent,
               float y_extent
               ) override;
-    void draw(AppInfo& info) override;
+    void draw(AppInfo& info, PlaybackState& playback_state) override;
 
     void update_scene(float zmin, float zmax, float dt) override;
     Camera& get_camera() override;
     void set_metadata(const SimulationMetadata& metadata) override;
+    void recreate_swap_chain() override;
 private:
     Camera camera;
     SimulationMetadata _metadata;

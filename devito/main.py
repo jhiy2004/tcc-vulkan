@@ -1,6 +1,5 @@
-"""Utilities for generating and post-processing shallow-water simulations."""
-
 from pathlib import Path
+from dataclasses import dataclass, field
 import dotenv
 import math
 import os
@@ -9,28 +8,40 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
-from devito import Eq, Function, Grid, Operator, TimeFunction, solve, sqrt
+from devito import Eq, Function, Grid, Operator, TimeFunction, solve
 
 
+@dataclass
 class InitialConditions:
     """Container for the grid and initial state used by the simulation."""
-    eta: TimeFunction
-    m: TimeFunction
-    n: TimeFunction
-    h: Function
-    d: Function
 
-    def __init__(self, nx, ny, lx, ly, g, eta0, m0, n0, d0, h0):
+    nx: int
+    ny: int
+    lx: float
+    ly: float
+    g: float
+    eta0: np.ndarray
+    m0: np.ndarray
+    n0: np.ndarray
+    d0: np.ndarray
+    h0: np.ndarray
+
+    grid: Grid = field(init=False)
+    eta: TimeFunction = field(init=False)
+    m: TimeFunction = field(init=False)
+    n: TimeFunction = field(init=False)
+    h: Function = field(init=False)
+    d: Function = field(init=False)
+
+    def __post_init__(self):
         """Validate the input fields and build the Devito grid objects."""
 
-        for m in (eta0, m0, n0, d0, h0):
+        for m in (self.eta0, self.m0, self.n0, self.d0, self.h0):
             (x, y) = m.shape
-            if x != nx or y != ny:
+            if x != self.nx or y != self.ny:
                 raise ValueError
 
-        self.g = g
-
-        self.grid = Grid(shape=(ny, nx), extent=(ly, lx), dtype=np.float32)
+        self.grid = Grid(shape=(self.ny, self.nx), extent=(self.ly, self.lx), dtype=np.float32)
 
         self.eta = TimeFunction(name='eta', grid=self.grid, space_order=2)
         self.m = TimeFunction(name='M', grid=self.grid, space_order=2)
@@ -38,18 +49,24 @@ class InitialConditions:
         self.h = Function(name='h', grid=self.grid)
         self.d = Function(name='D', grid=self.grid)
 
-        self.eta.data[0] = eta0.copy()
-        self.m.data[0] = m0.copy()
-        self.n.data[0] = n0.copy()
-        self.d.data[:] = eta0 + h0
-        self.h.data[:] = h0.copy()
+        self.eta.data[0] = self.eta0.copy()
+        self.m.data[0] = self.m0.copy()
+        self.n.data[0] = self.n0.copy()
+        self.d.data[:] = self.eta0 + self.h0
+        self.h.data[:] = self.h0.copy()
 
+
+@dataclass
+class SimulationParams:
+    """Container for the simulation parameters."""
+    t_max: float
+    nt: int
+    n_frames: int
 
 def generate_simulation_file(
     filepath: Path,
     initial_cond: InitialConditions,
-    t_max: float,
-    nt: int,
+    simulation_params: SimulationParams,
     buffer_size: int,
     num_type: str,
     save_images: bool = False,
@@ -83,7 +100,13 @@ def generate_simulation_file(
         grid
     )
 
+    t_max = simulation_params.t_max
+    nt = simulation_params.nt
+    n_frames = simulation_params.n_frames
+
     dt = t_max / nt
+    delta_frames = nt // n_frames
+    
     nblocks = math.ceil(nt / buffer_size)
 
     with open(filepath, "wb") as f:
@@ -106,9 +129,11 @@ def generate_simulation_file(
 
         f.write(struct.pack("<I", eta.data.shape[1]))
         f.write(struct.pack("<I", eta.data.shape[2]))
-        f.write(struct.pack("<I", nt))
+        f.write(struct.pack("<I", n_frames))
 
         h.data.astype(np_type).tofile(f)
+
+        image_count = 0
         for b in range(nblocks):
             steps = min(buffer_size, nt - b * buffer_size)
 
@@ -118,15 +143,29 @@ def generate_simulation_file(
 
             if save_images:
                 fig, ax = plt.subplots(figsize=(6, 5))
-                current_frame = eta_res.data[0]
+                current_frame = data[0]
                 im = ax.imshow(current_frame.T, vmin=-1.0, vmax=1.0, cmap="seismic")
                 plt.colorbar(im, ax=ax)
-                plt.xlabel('x')
-                plt.ylabel('y')
-                plt.title(f"Snapshot - Bloco {b} | Time step {0}")
-                plt.savefig(images_path / f'simulation_{b}.png')
+                plt.xlabel("x")
+                plt.ylabel("y")
+                plt.title(f"Snapshot - Bloco {b} | Time step {image_count}")
+                plt.savefig(images_path / f"simulation_{b}.png")
                 plt.close(fig)
-            np.nan_to_num(data, nan=0.0).astype(np_type).tofile(f)
+
+            selected_frames = [
+                local_idx
+                for local_idx in range(steps)
+                if (
+                    image_count + local_idx == 0 or
+                    image_count + local_idx == nt - 1 or
+                    (image_count + local_idx) % delta_frames == 0
+                )
+            ]
+
+            for local_idx in selected_frames:
+                np.nan_to_num(data[local_idx], nan=0.0).astype(np_type).tofile(f)
+
+            image_count += steps
 
 
 def ForwardOperator(etasave, eta, M, N, h, D, g, grid):
@@ -193,26 +232,24 @@ def main():
     n0 = 0. * m0
     d0 = eta0 + h0
 
-    try:
-        init_cond = InitialConditions(
-            nx=401,
-            ny=401,
-            lx=100.0,
-            ly=100.0,
-            g=9.81,
-            eta0=eta0,
-            m0=m0,
-            n0=n0,
-            d0=d0,
-            h0=h0,
-        )
-    except ValueError:
-        print("Vish")
-        exit(1)
+    init_cond = InitialConditions(
+        nx=401,
+        ny=401,
+        lx=100.0,
+        ly=100.0,
+        g=9.81,
+        eta0=eta0,
+        m0=m0,
+        n0=n0,
+        d0=d0,
+        h0=h0,
+    )
+
+    simulation_params = SimulationParams(t_max=2.0, nt=8000, n_frames=1000)
 
     try:
         print(output_path / 'example.sim')
-        generate_simulation_file(output_path / "example.sim", init_cond, 2, 8000, 500, 'float', save_images=True, images_path=output_path / 'images')
+        generate_simulation_file(output_path / "example.sim", init_cond, simulation_params, 500, 'float', save_images=True, images_path=output_path / 'images')
         
         print("Generate simulation file")
     except ValueError:

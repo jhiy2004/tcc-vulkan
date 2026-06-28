@@ -6,8 +6,10 @@
 #include "window.h"
 #include <thread>
 #include <atomic>
+#include <mutex>
 #include "app_info.h"
 #include "simulation_metadata.h"
+#include "playback_state.h"
 
 #include <iostream>
 
@@ -31,6 +33,12 @@ public:
         init_renderer();
 
        _producer_thread = std::thread(&App::frame_producer, this);
+        {
+            std::lock_guard lock(_producerMutex);
+            _restartProducer = true;
+        }
+
+        _producerCv.notify_one();
     }
 
     ~App() {
@@ -38,6 +46,8 @@ public:
 
         _running = false;
         fb.set_finished();
+
+        _producerCv.notify_one();
 
         if (_producer_thread.joinable()) {
             _producer_thread.join();
@@ -53,10 +63,17 @@ private:
 
     std::atomic<bool> _running = true;
     std::thread _producer_thread;
+    std::atomic_bool _restartProducer{false};
+    std::mutex _loaderMutex;
+
+    std::mutex _producerMutex;
+    std::condition_variable _producerCv;
+
     Loader loader;
     FrameBuffer fb;
     IWindow *_window = nullptr;
     IRenderer *_renderer = nullptr;
     AppInfo info;
+    PlaybackState playback_state;
     SimulationMetadata metadata;
 };

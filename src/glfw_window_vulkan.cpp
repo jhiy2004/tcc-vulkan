@@ -14,6 +14,19 @@ void GLFWVulkanWindow::key_callback(GLFWwindow *window, int key, int scancode,
   }
 }
 
+void GLFWVulkanWindow::framebuffer_resize_callback(GLFWwindow *window, int width, int height) {
+  auto *self =
+      static_cast<GLFWVulkanWindow *>(glfwGetWindowUserPointer(window));
+
+  self->_framebuffer_resized = true;
+}
+
+bool GLFWVulkanWindow::consume_framebuffer_resized() {
+    bool resized = _framebuffer_resized;
+    _framebuffer_resized = false;
+    return resized;
+}
+
 void GLFWVulkanWindow::camera_input_handler(int key, int action) {
   if (!_camera)
     return;
@@ -67,11 +80,12 @@ void GLFWVulkanWindow::init() {
   glfwInit();
 
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-  glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+  glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
   _window = glfwCreateWindow(_width, _height, _title.c_str(), NULL, NULL);
 
   glfwSetWindowUserPointer(_window, this);
   glfwSetKeyCallback(_window, key_callback);
+  glfwSetFramebufferSizeCallback(_window, framebuffer_resize_callback);
 }
 
 void GLFWVulkanWindow::pollEvents() { glfwPollEvents(); }

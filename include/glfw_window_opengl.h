@@ -20,6 +20,7 @@ public:
     }
 
     void set_camera(Camera *camera) override;
+    bool consume_framebuffer_resized() override;
 
     ~GLFWOpenGLWindow() {
         glfwDestroyWindow(_window);
