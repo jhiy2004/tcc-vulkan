@@ -16,3 +16,5 @@ build/
 files/
 .vscode
 imgui.ini
+vtks/
+devito/simulations/

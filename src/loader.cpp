@@ -60,7 +60,7 @@ Loader::Loader(const std::filesystem::path& filename) : file(filename, std::ios:
         for (uint32_t i=0; i < row; i++) {
             for (uint32_t j=0; j < col; j++) {
                 uint32_t pos = i*col + j;
-                bathymetry_z[pos] = -z_values[pos];
+                bathymetry_z[pos] = z_values[pos];
 
                 float value{bathymetry_z[pos]};
                 

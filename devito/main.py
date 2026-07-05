@@ -13,6 +13,9 @@ from devito import Eq, Function, Grid, Operator, TimeFunction, solve
 
 from scipy.ndimage import gaussian_filter
 
+import vtk
+from vtk.util.numpy_support import numpy_to_vtk
+
 from typing import Tuple
 
 @dataclass
@@ -113,7 +116,7 @@ def generate_simulation_file(
     buffer_size: int,
     num_type: str,
     save_images: bool = False,
-    images_path: Path = None,
+    images_path: Path | None = None,
 ):
     """
     Executa a simulação numérica e grava os estados selecionados em um arquivo
@@ -178,7 +181,6 @@ def generate_simulation_file(
     n_frames = simulation_params.n_frames
 
     dt = t_max / nt
-    delta_frames = nt // n_frames
     
     nblocks = math.ceil(nt / buffer_size)
 
@@ -204,10 +206,10 @@ def generate_simulation_file(
         f.write(struct.pack("<I", eta.data.shape[2]))
         f.write(struct.pack("<I", n_frames))
 
-        h.data.astype(np_type).tofile(f)
+        (-h.data).astype(np_type).tofile(f)
 
         image_count = 0
-        selected_frames = set([i for i in range(nt) if i % delta_frames == 0])
+        selected_frames = set(np.linspace(0, nt - 1, n_frames, dtype=int))
 
         assert len(selected_frames) == n_frames, "O número de quadros selecionados não corresponde a n_frames" 
 
@@ -280,7 +282,174 @@ def ForwardOperator(etasave, eta, M, N, h, D, g, grid):
 
     return Operator([update_eta, update_M, update_N, eq_D] + [Eq(etasave, eta)])
 
-def example_generator(selector: int, n_frames: int) -> Tuple[InitialConditions, SimulationParams]:
+def write_surface_vts(filename, x, y, z):
+
+    nx, ny = z.shape
+
+    points = vtk.vtkPoints()
+    points.SetNumberOfPoints(nx * ny)
+
+    values = np.empty(nx * ny)
+
+    idx = 0
+    for j in range(ny):
+        for i in range(nx):
+            points.SetPoint(idx,
+                            float(x[i, j]),
+                            float(y[i, j]),
+                            float(z[i, j]))
+
+            values[idx] = z[i, j]
+            idx += 1
+
+    grid = vtk.vtkStructuredGrid()
+    grid.SetDimensions(nx, ny, 1)
+    grid.SetPoints(points)
+
+    vtk_values = numpy_to_vtk(values)
+
+    vtk_values.SetName("Elevation")
+
+    grid.GetPointData().AddArray(vtk_values)
+    grid.GetPointData().SetScalars(vtk_values)
+
+    writer = vtk.vtkXMLStructuredGridWriter()
+    writer.SetFileName(str(filename.with_suffix(".vts")))
+    writer.SetInputData(grid)
+    writer.Write()
+
+def generate_vtk_files(
+    output_dir: Path,
+    initial_cond: InitialConditions,
+    simulation_params: SimulationParams,
+    buffer_size: int,
+):
+    """
+    Gera arquivos VTK XML (.vts) para a batimetria e para cada frame
+    da superfície livre.
+
+    Estrutura gerada:
+
+        output_dir/
+            bathymetry.vts
+            frame_000000.vts
+            frame_000001.vts
+            ...
+
+    Cada arquivo contém uma Structured Grid onde:
+
+        X = coordenadas x
+        Y = coordenadas y
+        Z = elevação (batimetria ou superfície)
+
+    Os arquivos podem ser abertos diretamente no ParaView.
+    """
+
+    grid = initial_cond.grid
+
+    eta = initial_cond.eta
+    m = initial_cond.m
+    n = initial_cond.n
+    h = initial_cond.h
+    d = initial_cond.d
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    eta_res = TimeFunction(
+        name="eta_res",
+        grid=grid,
+        space_order=2,
+        save=buffer_size,
+    )
+
+    op = ForwardOperator(
+        eta_res,
+        eta,
+        m,
+        n,
+        h,
+        d,
+        initial_cond.g,
+        grid,
+    )
+
+    t_max = simulation_params.t_max
+    nt = simulation_params.nt
+    n_frames = simulation_params.n_frames
+
+    dt = t_max / nt
+    delta_frames = nt // n_frames
+
+    nx = eta.data.shape[1]
+    ny = eta.data.shape[2]
+
+    Lx = grid.extent[0]
+    Ly = grid.extent[1]
+
+    x = np.linspace(0.0, Lx, nx)
+    y = np.linspace(0.0, Ly, ny)
+
+    X, Y = np.meshgrid(x, y, indexing="ij")
+
+    # ------------------------------------------------------------
+    # Batimetria
+    # ------------------------------------------------------------
+
+    write_surface_vts(
+        output_dir / "bathymetry",
+        X,
+        Y,
+        -h.data,
+    )
+
+    # ------------------------------------------------------------
+    # Simulação
+    # ------------------------------------------------------------
+
+    selected_frames = set(np.linspace(0, nt - 1, n_frames, dtype=int))
+
+    assert len(selected_frames) == n_frames
+
+    nblocks = math.ceil(nt / buffer_size)
+
+    current_step = 0
+    frame_id = 0
+
+    for b in range(nblocks):
+
+        steps = min(buffer_size, nt - b * buffer_size)
+
+        op.apply(
+            time_M=steps - 1,
+            dt=dt,
+        )
+
+        data = eta_res.data[:steps].copy()
+
+        for i in range(steps):
+
+            if current_step + i not in selected_frames:
+                continue
+
+            surface = np.nan_to_num(data[i])
+
+            write_surface_vts(
+                output_dir / f"frame_{frame_id:06d}",
+                X,
+                Y,
+                surface,
+            )
+
+            frame_id += 1
+
+        current_step += steps
+
+
+def calculate_nt(base_val, base_nx, nx):
+    return round(base_val * (nx - 1) / (base_nx - 1))
+
+
+def example_generator(selector: int, n_frames: int, nx: int, ny: int) -> Tuple[InitialConditions, SimulationParams]:
     """
     Gera um dos cenários de simulação pré-definidos.
 
@@ -321,8 +490,6 @@ def example_generator(selector: int, n_frames: int) -> Tuple[InitialConditions, 
     """
 
     GRAVITY = 9.81  # m/s²
-    NX = 401
-    NY = 401
 
     if selector == 1:
         # Example I: Tsunami in ocean with constant depth
@@ -330,8 +497,8 @@ def example_generator(selector: int, n_frames: int) -> Tuple[InitialConditions, 
         lx = 100.0
         ly = 100.0
 
-        x = np.linspace(0.0, lx, num=NX)
-        y = np.linspace(0.0, ly, num=NY)
+        x = np.linspace(0.0, lx, num=nx)
+        y = np.linspace(0.0, ly, num=ny)
         X, Y = np.meshgrid(x, y)
 
         h0 = 50. * np.ones_like(X)
@@ -341,15 +508,15 @@ def example_generator(selector: int, n_frames: int) -> Tuple[InitialConditions, 
         d0 = eta0 + 50.
 
         t_max = 3.0
-        nt = 4500
+        nt = calculate_nt(4500, 401, nx)
     elif selector == 2:
         # Example II: Two Tsunamis in ocean with constant depth
         # Link: https://www.devitoproject.org/examples/cfd/08_shallow_water_equation.html#example-ii-two-tsunamis-in-ocean-with-constant-depth
         lx = 100.0
         ly = 100.0
 
-        x = np.linspace(0.0, lx, num=NX)
-        y = np.linspace(0.0, ly, num=NY)
+        x = np.linspace(0.0, lx, num=nx)
+        y = np.linspace(0.0, ly, num=ny)
         X, Y = np.meshgrid(x, y)
 
         h0 = 50 * np.ones_like(X)
@@ -360,15 +527,15 @@ def example_generator(selector: int, n_frames: int) -> Tuple[InitialConditions, 
         d0 = eta0 + h0
         
         t_max = 3.5
-        nt = 8000
+        nt = calculate_nt(8000, 401, nx)
     elif selector == 3:
         # Example III: Tsunami in an ocean with 1D depth variation
         # Link: https://www.devitoproject.org/examples/cfd/08_shallow_water_equation.html#example-iii-tsunami-in-an-ocean-with-1d-tanh-depth-variation
         lx = 100.0
         ly = 100.0
 
-        x = np.linspace(0.0, lx, num=NX)
-        y = np.linspace(0.0, ly, num=NY)
+        x = np.linspace(0.0, lx, num=nx)
+        y = np.linspace(0.0, ly, num=ny)
         X, Y = np.meshgrid(x, y)
         
         h0 = 50 - 45 * np.tanh((X-70.)/8.)
@@ -378,15 +545,15 @@ def example_generator(selector: int, n_frames: int) -> Tuple[InitialConditions, 
         d0 = eta0 + h0
 
         t_max = 2.0
-        nt = 4000
+        nt = calculate_nt(4000, 401, nx)
     elif selector == 4:
         # Example IV: Tsunami in an ocean with a seamount
         # Link: https://www.devitoproject.org/examples/cfd/08_shallow_water_equation.html#example-iv-tsunami-in-an-ocean-with-a-seamount
         lx = 100.0
         ly = 100.0
 
-        x = np.linspace(0.0, lx, num=NX)
-        y = np.linspace(0.0, ly, num=NY)
+        x = np.linspace(0.0, lx, num=nx)
+        y = np.linspace(0.0, ly, num=ny)
         X, Y = np.meshgrid(x, y)
 
         h0 = 50. * np.ones_like(X)
@@ -397,22 +564,22 @@ def example_generator(selector: int, n_frames: int) -> Tuple[InitialConditions, 
         d0 = eta0 + h0
 
         t_max = 2.0
-        nt = 8000
+        nt = calculate_nt(8000, 401, nx)
     elif selector == 5:
         # Example V: Tsunami in an ocean with random seafloor topography variations
         # Link: https://www.devitoproject.org/examples/cfd/08_shallow_water_equation.html#example-v-tsunami-in-an-ocean-with-random-seafloor-topography-variations
         lx = 100.0
         ly = 100.0
 
-        x = np.linspace(0.0, lx, num=NX)
-        y = np.linspace(0.0, ly, num=NY)
+        x = np.linspace(0.0, lx, num=nx)
+        y = np.linspace(0.0, ly, num=ny)
         X, Y = np.meshgrid(x, y)
 
         h0 = 30. * np.ones_like(X)
         pert = 5.
 
         np.random.seed(102034)
-        r = 2.0 * (np.random.rand(NY, NX) - 0.5) * pert
+        r = 2.0 * (np.random.rand(ny, nx) - 0.5) * pert
         r = gaussian_filter(r, sigma=16)
         h0 = h0 * (1 + r)
 
@@ -423,15 +590,15 @@ def example_generator(selector: int, n_frames: int) -> Tuple[InitialConditions, 
         d0 = eta0 + h0
 
         t_max = 3.0
-        nt = 4000
+        nt = calculate_nt(4000, 401, nx)
     elif selector == 6:
         # Example VI: 2D circular dam break problem
         # Link: https://www.devitoproject.org/examples/cfd/08_shallow_water_equation.html#example-vi-2d-circular-dam-break-problem
         lx = 100.0
         ly = 100.0
 
-        x = np.linspace(0.0, lx, num=NX)
-        y = np.linspace(0.0, ly, num=NY)
+        x = np.linspace(0.0, lx, num=nx)
+        y = np.linspace(0.0, ly, num=ny)
         X, Y = np.meshgrid(x, y)
 
         h0 = 30. * np.ones_like(X)
@@ -445,14 +612,14 @@ def example_generator(selector: int, n_frames: int) -> Tuple[InitialConditions, 
         d0 = eta0 + h0
 
         t_max = 3.0
-        nt = 4000
+        nt = calculate_nt(4000, 401, nx)
     else:
         raise ValueError("Invalid example selector")
 
 
     initial_conditions = InitialConditions(
-        nx=NX,
-        ny=NY,
+        nx=nx,
+        ny=ny,
         lx=lx,
         ly=ly,
         g=GRAVITY,
@@ -513,10 +680,17 @@ def main():
 
     parser = argparse.ArgumentParser()
 
+    parser.add_argument(
+        "--vtk",
+        action="store_true",
+        help="Gera arquivos VTK."
+    )
     parser.add_argument("--example", type=int, default=1)
     parser.add_argument("--frames", type=int, default=1000)
     parser.add_argument("--buffer-size", type=int, default=500)
     parser.add_argument("--type", choices=["int", "float", "double"], default="float")
+    parser.add_argument("--grid-x", type=int, default=401)
+    parser.add_argument("--grid-y", type=int, default=401)
 
     args = parser.parse_args()
 
@@ -529,13 +703,29 @@ def main():
     dotenv.load_dotenv()
     output_path = Path(os.getenv("OUTPUT_PATH"))
 
-    init_cond, simulation_params = example_generator(example_number, n_frames)
+    init_cond, simulation_params = example_generator(example_number, n_frames, args.grid_x, args.grid_y)
+
+    if args.vtk:
+        vtk_path = output_path / "vtks"
+        vtk_path.mkdir(parents=True, exist_ok=True)
+
+        start = time.perf_counter()
+        generate_vtk_files(vtk_path, init_cond, simulation_params, buffer_size)
+        end = time.perf_counter()
+
+        print(f"Execution time: {end - start:.2f} s")
+        exit(0)
 
     try:
         print(output_path / 'example.sim')
+
+        start = time.perf_counter()
         generate_simulation_file(output_path / "example.sim", init_cond, simulation_params, buffer_size, 'float', save_images=True, images_path=output_path / 'images')
-        
+        end = time.perf_counter()
+
+
         print("Generate simulation file")
+        print("Execution time: {:.2f} seconds".format(end - start))
     except ValueError:
         print("Something went wrong. Please check the parameters and try again.")
         exit(1)
