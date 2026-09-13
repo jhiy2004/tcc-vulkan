@@ -18,11 +18,14 @@ public:
               ) override;
     void draw(AppInfo &info, PlaybackState &playback_state, SimulationMetadata& metadata, RenderSettings& settings) override;
 
+    void update_frame_z_data(Frame& frame) override;
     void update_scene(float zmin, float zmax, float dt) override;
     Camera& get_camera() override;
     void recreate_swap_chain() override;
 private:
+    void create_shader();
+
+    unsigned int shader_program;
     Camera camera;
-    SimulationMetadata _metadata;
 };
 

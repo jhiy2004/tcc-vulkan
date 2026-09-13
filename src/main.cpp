@@ -18,14 +18,14 @@ int main(int argc, char** argv) {
 
     std::cout << "Started application" << std::endl;
 
-    GLFWVulkanWindow vk_window(800, 600, "Vulkan App");
-    VulkanRenderer vk_renderer;
-    
-    //GLFWOpenGLWindow gl_window(800, 600, "OpenGL App");
-    //OpenGLRenderer gl_renderer;
+    //GLFWVulkanWindow window(800, 600, "Vulkan App");
+    //VulkanRenderer renderer;
+
+    GLFWOpenGLWindow window(800, 600, "OpenGL App");
+    OpenGLRenderer renderer;
     
 
-    App app(&vk_window, &vk_renderer, std::filesystem::path(FILES_DIR) / argv[1]);
+    App app(&window, &renderer, std::filesystem::path(FILES_DIR) / argv[1]);
 
     app.run();
 
