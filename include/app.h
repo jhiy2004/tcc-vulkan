@@ -26,9 +26,6 @@ public:
         metadata.bathymetryZMax = loader.get_bathymetry_zmax();
         metadata.bathymetryZMin = loader.get_bathymetry_zmin();
 
-        // Send basic simulation data to the renderer
-        _renderer->set_metadata(metadata);
-
         init_window();
         init_renderer();
 
@@ -76,4 +73,5 @@ private:
     AppInfo info;
     PlaybackState playback_state;
     SimulationMetadata metadata;
+    RenderSettings settings;
 };

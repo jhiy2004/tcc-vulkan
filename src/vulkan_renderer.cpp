@@ -225,7 +225,7 @@ void VulkanRenderer::init(
     return;
 }
 
-void VulkanRenderer::draw(AppInfo& info, PlaybackState& playback_state) {
+void VulkanRenderer::draw(AppInfo& info, PlaybackState& playback_state, SimulationMetadata& metadata, RenderSettings& settings) {
     vkWaitForFences(_device, 1, &_draw_fences[_current_frame], VK_TRUE, UINT64_MAX);
 
     uint32_t imageIndex{};
@@ -235,7 +235,7 @@ void VulkanRenderer::draw(AppInfo& info, PlaybackState& playback_state) {
         recreate_swap_chain();
     }
 
-    record_command_buffer(imageIndex, info, playback_state);
+    record_command_buffer(imageIndex, info, playback_state, metadata, settings);
 
     vkResetFences(_device, 1, &_draw_fences[_current_frame]);
 
@@ -939,7 +939,7 @@ VkShaderModule VulkanRenderer::create_shader_module(const std::vector<char> &cod
     return shaderModule;
 }
 
-void VulkanRenderer::record_command_buffer(uint32_t imageIndex, AppInfo& info, PlaybackState& playback_state) {
+void VulkanRenderer::record_command_buffer(uint32_t imageIndex, AppInfo& info, PlaybackState& playback_state, SimulationMetadata& metadata, RenderSettings& settings) {
     VkCommandBufferBeginInfo beginInfo {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
     };
@@ -1052,10 +1052,10 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex, AppInfo& info, P
     float temp_max{_frame_data.zMax};
     float temp_min{_frame_data.zMin};
 
-    _frame_data.zMax = _metadata.bathymetryZMax;
-    _frame_data.zMin = _metadata.bathymetryZMin;
-    _frame_data.renderMode = _settings.bathymetryRenderMode;
-    _frame_data.zScale = _settings.bathymetryZScale;
+    _frame_data.zMax = metadata.bathymetryZMax;
+    _frame_data.zMin = metadata.bathymetryZMin;
+    _frame_data.renderMode = settings.bathymetryRenderMode;
+    _frame_data.zScale = settings.bathymetryZScale;
 
     vkCmdPushConstants(_command_buffers[_current_frame], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(SurfacePushConstants), &_frame_data);
     vkCmdDrawIndexed(_command_buffers[_current_frame], _indices_size, 1, 0, 0, 0);
@@ -1065,12 +1065,12 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex, AppInfo& info, P
     
     _frame_data.zMax = temp_max;
     _frame_data.zMin = temp_min;
-    _frame_data.renderMode = _settings.surfaceRenderMode;
-    _frame_data.zScale = _settings.surfaceZScale;
+    _frame_data.renderMode = settings.surfaceRenderMode;
+    _frame_data.zScale = settings.surfaceZScale;
     vkCmdPushConstants(_command_buffers[_current_frame], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(SurfacePushConstants), &_frame_data);
     vkCmdDrawIndexed(_command_buffers[_current_frame], _indices_size, 1, 0, 0, 0);
 
-    draw_imgui(info, playback_state);
+    draw_imgui(info, playback_state, metadata, settings);
 
     // End rendering
     vkCmdEndRendering(_command_buffers[_current_frame]);
@@ -1597,7 +1597,7 @@ void VulkanRenderer::init_imgui() {
 #endif
 }
 
-void VulkanRenderer::draw_imgui(AppInfo& info, PlaybackState& playback_state) {
+void VulkanRenderer::draw_imgui(AppInfo& info, PlaybackState& playback_state, SimulationMetadata& metadata, RenderSettings& settings) {
     // Camera data
     float yaw{camera.getYaw()};
     float pitch{camera.getPitch()};
@@ -1626,12 +1626,12 @@ void VulkanRenderer::draw_imgui(AppInfo& info, PlaybackState& playback_state) {
     ImGui::Separator();
 
     ImGui::Text("Simulation data");
-    ImGui::Text("Rows: %d", _metadata.rows);
-    ImGui::Text("Cols: %d", _metadata.cols);
-    ImGui::Text("Bathymetry Z Min: %f", _metadata.bathymetryZMin);
-    ImGui::Text("Bathymetry Z Max: %f", _metadata.bathymetryZMax);
-    ImGui::Text("X Extent: %f", _metadata.xExtent);
-    ImGui::Text("Y Extent: %f", _metadata.yExtent);
+    ImGui::Text("Rows: %d", metadata.rows);
+    ImGui::Text("Cols: %d", metadata.cols);
+    ImGui::Text("Bathymetry Z Min: %f", metadata.bathymetryZMin);
+    ImGui::Text("Bathymetry Z Max: %f", metadata.bathymetryZMax);
+    ImGui::Text("X Extent: %f", metadata.xExtent);
+    ImGui::Text("Y Extent: %f", metadata.yExtent);
 
     ImGui::Separator();
 
@@ -1651,10 +1651,10 @@ void VulkanRenderer::draw_imgui(AppInfo& info, PlaybackState& playback_state) {
     ImGui::Separator();
 
     ImGui::Text("Rendering settings");
-    ImGui::InputFloat("Surface Z Scale", &_settings.surfaceZScale);
-    ImGui::InputFloat("Bathymetry Z Scale", &_settings.bathymetryZScale);
-    ImGui::InputInt("Surface Render Mode", &_settings.surfaceRenderMode);
-    ImGui::InputInt("Bathymetry Render Mode", &_settings.bathymetryRenderMode);
+    ImGui::InputFloat("Surface Z Scale", &settings.surfaceZScale);
+    ImGui::InputFloat("Bathymetry Z Scale", &settings.bathymetryZScale);
+    ImGui::InputInt("Surface Render Mode", &settings.surfaceRenderMode);
+    ImGui::InputInt("Bathymetry Render Mode", &settings.bathymetryRenderMode);
 
     ImGui::End();
 

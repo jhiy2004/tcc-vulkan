@@ -56,7 +56,7 @@ void App::run()
             currentFrame.zmax,
             dt
         );
-        _renderer->draw(info, playback_state);
+        _renderer->draw(info, playback_state, metadata, settings);
 
         if (playback_state.isPaused && prevFrame != playback_state.currentFrame) {
         #ifndef NDEBUG
