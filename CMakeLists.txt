@@ -16,6 +16,7 @@ add_executable(tcc
     src/opengl_renderer.cpp
     src/util.cpp
     src/camera.cpp
+    src/imgui_menu.cpp
 )
 
 

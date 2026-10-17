@@ -2,6 +2,10 @@
 
 #include "util.h"
 
+#include "imgui_menu.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+
 void OpenGLRenderer::init(IWindow *window, 
                           const std::vector<glm::vec2>& grid,
                           const std::vector<float>& bathymetryZ,
@@ -9,7 +13,11 @@ void OpenGLRenderer::init(IWindow *window,
                           float x_extent,
                           float y_extent
                           ) {
+    _window = window->get_window();
+
     create_shader();
+
+    init_imgui();
 
     // Configurar posicao inicial da camera
     float xcenter{x_extent / 2};
@@ -42,6 +50,8 @@ void OpenGLRenderer::draw(AppInfo &info, PlaybackState &playback_state, Simulati
 
     glUseProgram(shader_program);
     glDrawArrays(GL_TRIANGLES, 0, 3);
+
+    draw_imgui(info, playback_state, metadata, settings);
 }
 
 Camera& OpenGLRenderer::get_camera() {
@@ -131,4 +141,47 @@ void OpenGLRenderer::create_shader() {
     #ifndef NDEBUG
         std::cerr << "Created shader program\n";
     #endif
+}
+
+void OpenGLRenderer::init_imgui() {
+    // O contexto OpenGL da janela precisa estar ativo aqui.
+    if (!_window) {
+        throw std::runtime_error("Window is nullptr");
+    }
+
+    // Cria o contexto do Dear ImGui.
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::SetCurrentContext(ImGui::GetCurrentContext());
+
+    // Configura o ImGui.
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+    // Inicializa o backend GLFW.
+    if (!ImGui_ImplGlfw_InitForOpenGL(_window, true)) {
+        throw std::runtime_error("Failed ImGui GLFW init");
+    }
+
+    // Escolha a versão GLSL conforme o contexto OpenGL criado.
+    const char* glsl_version = "#version 330";
+
+    if (!ImGui_ImplOpenGL3_Init(glsl_version)) {
+        ImGui_ImplGlfw_Shutdown();
+        throw std::runtime_error("Failed ImGui OpenGL init");
+    }
+
+#ifndef NDEBUG
+    std::cout << "Initialized ImGui OpenGL" << std::endl;
+#endif
+}
+
+
+void OpenGLRenderer::draw_imgui(AppInfo& info, PlaybackState& playback_state, SimulationMetadata& metadata, RenderSettings& settings) {
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    
+    draw_imgui_menu(info, playback_state, metadata, settings, camera);
+
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }

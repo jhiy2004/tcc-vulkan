@@ -23,9 +23,12 @@ public:
     Camera& get_camera() override;
     void recreate_swap_chain() override;
 private:
+    void init_imgui();
+    void draw_imgui(AppInfo& info, PlaybackState& playback_state, SimulationMetadata& metadata, RenderSettings& settings);
     void create_shader();
 
     unsigned int shader_program;
     Camera camera;
+    GLFWwindow* _window{nullptr};
 };
 
