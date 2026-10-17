@@ -23,6 +23,9 @@ void GLFWOpenGLWindow::init() {
         throw std::runtime_error("Falha ao inicializar o glad");
     }
 
+    glfwSwapInterval(0);
+
+
     // Input: permite que os callbacks acessem esta instância.
     glfwSetWindowUserPointer(_window, this);
     glfwSetKeyCallback(_window, key_callback);
