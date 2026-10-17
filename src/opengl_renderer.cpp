@@ -6,6 +6,10 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
+#include "glm/ext/matrix_clip_space.hpp"
+#include "glm/ext/matrix_transform.hpp"
+#include "glm/gtc/type_ptr.hpp"
+
 void OpenGLRenderer::init(IWindow *window, 
                           const std::vector<glm::vec2>& grid,
                           const std::vector<float>& bathymetryZ,
@@ -13,9 +17,17 @@ void OpenGLRenderer::init(IWindow *window,
                           float x_extent,
                           float y_extent
                           ) {
+    _window_width = window->get_width();
+    _window_height = window->get_height();
+
+    #ifndef NDEBUG
+        std::cerr << "Window size: " << _window_width << " x " << _window_height << "\n";
+    #endif
+
     _window = window->get_window();
 
     create_shader();
+    create_vbos(grid, bathymetryZ, triangles);
 
     init_imgui();
 
@@ -26,30 +38,84 @@ void OpenGLRenderer::init(IWindow *window,
     camera.setTarget(glm::vec3{xcenter, ycenter, 0});
 }
 
-void OpenGLRenderer::draw(AppInfo &info, PlaybackState &playback_state, SimulationMetadata& metadata, RenderSettings& settings) {
+void OpenGLRenderer::draw(AppInfo& info, PlaybackState& playback_state, SimulationMetadata& metadata, RenderSettings& settings) {
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    float vertices[] = {
-        -0.5f, -0.5f, 0.0f,
-        0.5f, -0.5f, 0.0f,
-        0.0f,  0.5f, 0.0f
-    }; 
-
-    unsigned int VBO, VAO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-
-    glBindVertexArray(VAO);
-
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0); 
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glUseProgram(shader_program);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glBindVertexArray(_vao);
+
+    // A grade XY é permanente e já está associada
+    // ao atributo 0 do VAO.
+    glBindBuffer(GL_ARRAY_BUFFER, _grid_xy_vbo);
+
+    // --------------------------------------------------
+    // 1. Renderizar batimetria
+    // --------------------------------------------------
+    glBindBuffer(GL_ARRAY_BUFFER, _bathymetry_z_vbo);
+
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(
+        1,
+        1,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(float),
+        nullptr
+    );
+
+    glUniform1i(
+        _render_mode_location,
+        settings.bathymetryRenderMode
+    );
+
+    glUniform1f(
+        _z_scale_location,
+        settings.bathymetryZScale
+    );
+
+    glDrawElements(
+        GL_TRIANGLES,
+        static_cast<GLsizei>(_indices_size),
+        GL_UNSIGNED_INT,
+        nullptr
+    );
+
+    // --------------------------------------------------
+    // 2. Renderizar superfície da simulação
+    // --------------------------------------------------
+
+    glBindBuffer(GL_ARRAY_BUFFER, _frame_z_vbo);
+
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(
+        1,
+        1,
+        GL_FLOAT,
+        GL_FALSE,
+        sizeof(float),
+        nullptr
+    );
+
+    glUniform1i(
+        _render_mode_location,
+        settings.surfaceRenderMode
+    );
+
+    glUniform1f(
+        _z_scale_location,
+        settings.surfaceZScale
+    );
+
+    glDrawElements(
+        GL_TRIANGLES,
+        static_cast<GLsizei>(_indices_size),
+        GL_UNSIGNED_INT,
+        nullptr
+    );
+
+    glBindVertexArray(0);
+    glUseProgram(0);
 
     draw_imgui(info, playback_state, metadata, settings);
 }
@@ -59,12 +125,71 @@ Camera& OpenGLRenderer::get_camera() {
 }
 
 void OpenGLRenderer::update_frame_z_data(Frame& frame) {
-    return;
+    const size_t size = frame.z_data.size() * sizeof(float);
+
+    if (size > _frame_z_capacity) {
+        glBindBuffer(GL_ARRAY_BUFFER, _frame_z_vbo);
+
+        glBufferData(
+            GL_ARRAY_BUFFER,
+            static_cast<GLsizeiptr>(size),
+            nullptr,
+            GL_DYNAMIC_DRAW
+        );
+
+        _frame_z_capacity = size;
+    }
+
+    glBindBuffer(GL_ARRAY_BUFFER, _frame_z_vbo);
+
+    if (size > 0) {
+        glBufferSubData(
+            GL_ARRAY_BUFFER,
+            0,
+            static_cast<GLsizeiptr>(size),
+            frame.z_data.data()
+        );
+    }
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void OpenGLRenderer::update_scene(float zmin, float zmax, float dt) {
 
+
+void OpenGLRenderer::update_scene(
+    float zmin,
+    float zmax,
+    float dt
+) {
+    camera.update(dt);
+
+    glm::mat4 model = glm::mat4(1.0f);
+    glm::mat4 view = camera.getViewMatrix();
+
+    float aspect = static_cast<float>(_window_width) /
+                   static_cast<float>(_window_height);
+
+    glm::mat4 proj = glm::perspective(
+        glm::radians(70.0f),
+        aspect,
+        0.1f,
+        1000.0f
+    );
+    
+    glm::mat4 mvp = proj * view * model;
+
+    glUseProgram(shader_program);
+    glUniformMatrix4fv(
+        _mvp_location,
+        1,
+        GL_FALSE,
+        glm::value_ptr(mvp)
+    );
+
+    glUniform1f(_z_min_location, zmin);
+    glUniform1f(_z_max_location, zmax);
 }
+
 
 void OpenGLRenderer::recreate_swap_chain() {
     // No swap chain in OpenGL, so nothing to do here
@@ -184,4 +309,78 @@ void OpenGLRenderer::draw_imgui(AppInfo& info, PlaybackState& playback_state, Si
     draw_imgui_menu(info, playback_state, metadata, settings, camera);
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+void OpenGLRenderer::create_vbos(
+    const std::vector<glm::vec2>& grid,
+    const std::vector<float>& bathymetryZ,
+    const std::vector<Triangle>& triangles
+) {
+    glGenVertexArrays(1, &_vao);
+    glBindVertexArray(_vao);
+
+    // Buffer permanente de coordenadas XY
+    glGenBuffers(1, &_grid_xy_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, _grid_xy_vbo);
+    glBufferData(
+        GL_ARRAY_BUFFER,
+        grid.size() * sizeof(glm::vec2),
+        grid.data(),
+        GL_STATIC_DRAW
+    );
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(
+        0, 2, GL_FLOAT, GL_FALSE,
+        2 * sizeof(float), nullptr
+    );
+
+    // Buffer permanente de profundidades Z
+    glGenBuffers(1, &_bathymetry_z_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, _bathymetry_z_vbo);
+    glBufferData(
+        GL_ARRAY_BUFFER,
+        bathymetryZ.size() * sizeof(float),
+        bathymetryZ.data(),
+        GL_STATIC_DRAW
+    );
+
+    glGenBuffers(1, &_frame_z_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, _frame_z_vbo);
+
+    _frame_z_capacity = bathymetryZ.size() * sizeof(float);
+
+    glBufferData(
+        GL_ARRAY_BUFFER,
+        static_cast<GLsizeiptr>(_frame_z_capacity),
+        nullptr,
+        GL_DYNAMIC_DRAW
+    );
+
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(
+        1, 1, GL_FLOAT, GL_FALSE,
+        sizeof(float), nullptr
+    );
+
+    // Buffer permanente de índices dos triângulos
+    glGenBuffers(1, &_triangles_ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _triangles_ebo);
+    glBufferData(
+        GL_ELEMENT_ARRAY_BUFFER,
+        triangles.size() * sizeof(Triangle),
+        triangles.data(),
+        GL_STATIC_DRAW
+    );
+    _indices_size = triangles.size() * 3;
+
+    // O EBO permanece associado ao VAO.
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    _mvp_location = glGetUniformLocation(shader_program, "mvp");
+    _render_mode_location = glGetUniformLocation(shader_program, "renderMode");
+    _z_min_location = glGetUniformLocation(shader_program, "zMin");
+    _z_max_location = glGetUniformLocation(shader_program, "zMax");
+    _z_scale_location = glGetUniformLocation(shader_program, "zScale");
 }

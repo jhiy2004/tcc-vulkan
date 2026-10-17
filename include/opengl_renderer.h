@@ -27,8 +27,30 @@ private:
     void draw_imgui(AppInfo& info, PlaybackState& playback_state, SimulationMetadata& metadata, RenderSettings& settings);
     void create_shader();
 
+    void create_vbos(const std::vector<glm::vec2>& grid, const std::vector<float>& bathymetryZ, const std::vector<Triangle>& triangles);
+
     unsigned int shader_program;
     Camera camera;
+    
+    uint32_t _window_height = 0;
+    uint32_t _window_width = 0;
     GLFWwindow* _window{nullptr};
+
+    GLuint _vao = 0;
+    GLuint _grid_xy_vbo = 0;
+    GLuint _bathymetry_z_vbo = 0;
+    GLuint _triangles_ebo = 0;
+
+    GLint _mvp_location = 0;
+    GLint _render_mode_location = 0;
+    GLint _z_min_location = 0;
+    GLint _z_max_location = 0;
+    GLint _z_scale_location = 0;
+
+    // Surface data
+    GLuint _frame_z_vbo = 0;
+    size_t _frame_z_capacity = 0;
+
+    int _indices_size;
 };
 
