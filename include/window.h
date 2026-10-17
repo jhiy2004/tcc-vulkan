@@ -12,6 +12,9 @@ public:
     virtual bool shouldClose() = 0;
     virtual void set_camera(Camera *camera) = 0;
     virtual GLFWwindow* get_window() const = 0;
+    virtual uint32_t get_width() const = 0;
+    virtual uint32_t get_height() const = 0;
+
     virtual bool consume_framebuffer_resized() = 0;
 };
 

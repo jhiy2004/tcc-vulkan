@@ -11,6 +11,8 @@
 #include <cstring>
 #include <algorithm>
 
+#include "imgui_menu.h"
+
 VulkanRenderer::~VulkanRenderer() {
     std::cout << "VulkanRenderer Destructor called" << std::endl;
 
@@ -225,7 +227,7 @@ void VulkanRenderer::init(
     return;
 }
 
-void VulkanRenderer::draw(AppInfo& info, PlaybackState& playback_state) {
+void VulkanRenderer::draw(AppInfo& info, PlaybackState& playback_state, SimulationMetadata& metadata, RenderSettings& settings) {
     vkWaitForFences(_device, 1, &_draw_fences[_current_frame], VK_TRUE, UINT64_MAX);
 
     uint32_t imageIndex{};
@@ -235,7 +237,7 @@ void VulkanRenderer::draw(AppInfo& info, PlaybackState& playback_state) {
         recreate_swap_chain();
     }
 
-    record_command_buffer(imageIndex, info, playback_state);
+    record_command_buffer(imageIndex, info, playback_state, metadata, settings);
 
     vkResetFences(_device, 1, &_draw_fences[_current_frame]);
 
@@ -939,7 +941,7 @@ VkShaderModule VulkanRenderer::create_shader_module(const std::vector<char> &cod
     return shaderModule;
 }
 
-void VulkanRenderer::record_command_buffer(uint32_t imageIndex, AppInfo& info, PlaybackState& playback_state) {
+void VulkanRenderer::record_command_buffer(uint32_t imageIndex, AppInfo& info, PlaybackState& playback_state, SimulationMetadata& metadata, RenderSettings& settings) {
     VkCommandBufferBeginInfo beginInfo {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
     };
@@ -1052,10 +1054,10 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex, AppInfo& info, P
     float temp_max{_frame_data.zMax};
     float temp_min{_frame_data.zMin};
 
-    _frame_data.zMax = _metadata.bathymetryZMax;
-    _frame_data.zMin = _metadata.bathymetryZMin;
-    _frame_data.renderMode = _settings.bathymetryRenderMode;
-    _frame_data.zScale = _settings.bathymetryZScale;
+    _frame_data.zMax = metadata.bathymetryZMax;
+    _frame_data.zMin = metadata.bathymetryZMin;
+    _frame_data.renderMode = settings.bathymetryRenderMode;
+    _frame_data.zScale = settings.bathymetryZScale;
 
     vkCmdPushConstants(_command_buffers[_current_frame], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(SurfacePushConstants), &_frame_data);
     vkCmdDrawIndexed(_command_buffers[_current_frame], _indices_size, 1, 0, 0, 0);
@@ -1065,12 +1067,12 @@ void VulkanRenderer::record_command_buffer(uint32_t imageIndex, AppInfo& info, P
     
     _frame_data.zMax = temp_max;
     _frame_data.zMin = temp_min;
-    _frame_data.renderMode = _settings.surfaceRenderMode;
-    _frame_data.zScale = _settings.surfaceZScale;
+    _frame_data.renderMode = settings.surfaceRenderMode;
+    _frame_data.zScale = settings.surfaceZScale;
     vkCmdPushConstants(_command_buffers[_current_frame], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(SurfacePushConstants), &_frame_data);
     vkCmdDrawIndexed(_command_buffers[_current_frame], _indices_size, 1, 0, 0, 0);
 
-    draw_imgui(info, playback_state);
+    draw_imgui(info, playback_state, metadata, settings);
 
     // End rendering
     vkCmdEndRendering(_command_buffers[_current_frame]);
@@ -1597,77 +1599,13 @@ void VulkanRenderer::init_imgui() {
 #endif
 }
 
-void VulkanRenderer::draw_imgui(AppInfo& info, PlaybackState& playback_state) {
-    // Camera data
-    float yaw{camera.getYaw()};
-    float pitch{camera.getPitch()};
-    float distance{camera.getDistance()};
-    
-    // Simulation data
-    float duration{playback_state.frameDuration};
-    int qtd_frames{info.get_qtd_frames()};
-    uint32_t count{playback_state.currentFrame};
-    float ratio{static_cast<float>(count) / static_cast<float>(qtd_frames)};
-    uint32_t current_frame{playback_state.currentFrame};
-
+void VulkanRenderer::draw_imgui(AppInfo& info, PlaybackState& playback_state, SimulationMetadata& metadata, RenderSettings& settings) {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    ImGui::Begin("Shallow Water Equations - Vulkan Renderer");
-
-    ImGui::Text("Playback controls");
-    if (ImGui::Button(playback_state.isPaused ? "Play" : "Pause")) {
-        playback_state.isPaused = !playback_state.isPaused;
-    }
-    ImGui::InputFloat("Minimum time on each simulation frame", &duration);
-    ImGui::InputScalar("Current Frame", ImGuiDataType_U32, &current_frame);
-
-    ImGui::Separator();
-
-    ImGui::Text("Simulation data");
-    ImGui::Text("Rows: %d", _metadata.rows);
-    ImGui::Text("Cols: %d", _metadata.cols);
-    ImGui::Text("Bathymetry Z Min: %f", _metadata.bathymetryZMin);
-    ImGui::Text("Bathymetry Z Max: %f", _metadata.bathymetryZMax);
-    ImGui::Text("X Extent: %f", _metadata.xExtent);
-    ImGui::Text("Y Extent: %f", _metadata.yExtent);
-
-    ImGui::Separator();
-
-    ImGui::Text("Frame rate: %d FPS", info.get_fps());
-    ImGui::Text("Amount of simulation frames: %d", info.get_qtd_frames());
-    ImGui::Text("Current simulation frame: %d", count);
-    ImGui::Text("Simulation Progress");
-    ImGui::ProgressBar(ratio);
-
-    ImGui::Separator();
     
-    ImGui::Text("Camera settings");
-    ImGui::InputFloat("Yaw", &yaw);
-    ImGui::InputFloat("Pitch", &pitch);
-    ImGui::InputFloat("Distance", &distance);
-
-    ImGui::Separator();
-
-    ImGui::Text("Rendering settings");
-    ImGui::InputFloat("Surface Z Scale", &_settings.surfaceZScale);
-    ImGui::InputFloat("Bathymetry Z Scale", &_settings.bathymetryZScale);
-    ImGui::InputInt("Surface Render Mode", &_settings.surfaceRenderMode);
-    ImGui::InputInt("Bathymetry Render Mode", &_settings.bathymetryRenderMode);
-
-    ImGui::End();
-
-    ImGui::Render();
+    draw_imgui_menu(info, playback_state, metadata, settings, camera);
 
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), _command_buffers[_current_frame]);
-
-    playback_state.frameDuration = duration;
-    playback_state.currentFrame = current_frame;
-
-    camera.setYaw(yaw);
-    camera.setPitch(pitch);
-    camera.setDistance(distance);
 }
 
 void VulkanRenderer::cleanup_imgui() {

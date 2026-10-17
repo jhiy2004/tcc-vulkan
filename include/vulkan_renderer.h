@@ -18,9 +18,6 @@
 #include "imgui_impl_vulkan.h"
 #include "imgui_impl_glfw.h"
 
-#include "app_info.h"
-#include "simulation_metadata.h"
-
 constexpr static uint32_t MAX_FRAMES_IN_FLIGHT{2}; 
 
 // Deve ser um multiplo de 16 para manter o alinhamento
@@ -36,13 +33,6 @@ struct SurfacePushConstants {
     float zScale;
 };
 
-struct RenderSettings {
-    float surfaceZScale{30.0f};
-    float bathymetryZScale{1.0f};
-    int bathymetryRenderMode{2};
-    int surfaceRenderMode{2};
-};
-
 class VulkanRenderer : public IRenderer {
 public:
     VulkanRenderer(){};
@@ -55,12 +45,9 @@ public:
               float x_extent,
               float y_extent
               ) override;
-    void draw(AppInfo& info, PlaybackState& playback_state) override;
+    void draw(AppInfo& info, PlaybackState& playback_state, SimulationMetadata& metadata, RenderSettings& settings) override;
     void update_frame_z_data(Frame& frame) override;
     void update_scene(float zmin, float zmax, float dt) override;
-    void set_metadata(const SimulationMetadata& metadata) override {
-        _metadata = metadata;
-    }
 
     void recreate_swap_chain();
 
@@ -76,7 +63,7 @@ private:
     void create_graphics_pipeline();
     void create_descriptor_set_layout();
     void init_imgui();
-    void draw_imgui(AppInfo& info, PlaybackState& playback_state);
+    void draw_imgui(AppInfo& info, PlaybackState& playback_state, SimulationMetadata& metadata, RenderSettings& settings);
     void cleanup_imgui();
     void cleanup_depth_resources();
 
@@ -106,7 +93,7 @@ private:
     );
 
     VkShaderModule create_shader_module(const std::vector<char> &code) const;
-    void record_command_buffer(uint32_t imageIndex, AppInfo& info, PlaybackState& playback_state);
+    void record_command_buffer(uint32_t imageIndex, AppInfo& info, PlaybackState& playback_state, SimulationMetadata& metadata, RenderSettings& settings);
     void create_command_pools();
     void create_command_buffers();
 
@@ -203,9 +190,6 @@ private:
     };
 
     uint32_t _current_frame{0};
-
-    SimulationMetadata _metadata;
-    RenderSettings _settings;
 
 #ifdef NDEBUG
     const bool enable_validation_layers = false;

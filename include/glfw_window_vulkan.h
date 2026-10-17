@@ -20,6 +20,14 @@ public:
         return _window;
     }
 
+    uint32_t get_width() const override {
+        return _width;
+    }
+
+    uint32_t get_height() const override {
+        return _height;
+    }
+
     void set_camera(Camera *camera) override;
 
     bool consume_framebuffer_resized() override;
